@@ -22,6 +22,7 @@ export function createInput(target) {
     sprint: false,
     jump: false,
     jumpPressed: false,
+    handbrake: false,
     interactPressed: false,
     pausePressed: false,
     map: false,
@@ -93,6 +94,7 @@ export function createInput(target) {
     actions.sprint = isHeld('ShiftLeft', 'ShiftRight');
     actions.jump = held.has('Space');
     actions.jumpPressed = pressed.has('Space');
+    actions.handbrake = held.has('Space');
     actions.interactPressed = pressed.has('KeyE');
     actions.pausePressed = pressed.has('Escape');
     actions.map = held.has('Tab');

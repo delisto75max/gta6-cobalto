@@ -5,6 +5,9 @@ import { generateCity } from './city.js';
 import { createInput } from './input.js';
 import { createPlayer } from './player.js';
 import { createScene } from './scene.js';
+import { createVehicles } from './vehicles.js';
+import { createTraffic } from './traffic.js';
+import { createPeds } from './peds.js';
 
 const canvas = document.getElementById('game');
 const hudCanvas = document.getElementById('hud');
@@ -33,12 +36,21 @@ window.__shotName = shotName || null;
 const city = generateCity(seed);
 const stage = createScene(canvas, city);
 const player = createPlayer(stage, city);
+const vehicles = createVehicles(stage, city, player, seed);
+const traffic = createTraffic(city, vehicles, seed);
+const peds = createPeds(stage, city, seed);
 const input = createInput(canvas);
 const systems = new Map();
+const clock = { time: 0, dt: STEP, step: 0 };
 const context = {
   city,
   scene: stage,
   player,
+  vehicles,
+  traffic,
+  peds,
+  camera: stage.camera,
+  clock,
   actions: input.actions,
   systems,
   seed,
@@ -53,11 +65,50 @@ function registerSystem(name, system) {
 }
 
 registerSystem('player', player);
+registerSystem('vehicles', vehicles);
+registerSystem('traffic', traffic);
+registerSystem('peds', peds);
 registerSystem('scene', { update: stage.update });
 registerSystem('hud', {
   update() {},
-  drawHUD() {
-    // The real HUD arrives with missions; this pass-through keeps canvas ownership here.
+  drawHUD(g, ctx) {
+    const vehicle = ctx.vehicles.activeVehicle;
+    const nearby = vehicle ? null : ctx.vehicles.nearestVehicle(ctx.player.state.position.x, ctx.player.state.position.z, 4);
+    if (!vehicle && !nearby) return;
+    const ratio = hudCanvas.width / Math.max(1, window.innerWidth);
+    g.save();
+    g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    g.textBaseline = 'alphabetic';
+    if (vehicle) {
+      const x = window.innerWidth - 276;
+      const y = window.innerHeight - 137;
+      g.fillStyle = 'rgba(13, 25, 29, 0.78)';
+      g.fillRect(x, y, 252, 113);
+      g.fillStyle = '#e8c985';
+      g.font = '600 15px sans-serif';
+      g.fillText(vehicle.name.toUpperCase(), x + 18, y + 27);
+      g.fillStyle = '#f5f0df';
+      g.font = '700 42px sans-serif';
+      g.fillText(String(Math.round(Math.abs(vehicle.speed) * 3.6)), x + 16, y + 75);
+      g.font = '600 14px sans-serif';
+      g.fillStyle = '#b9cbc9';
+      g.fillText('km/h', x + 101, y + 73);
+      g.fillStyle = '#283b40';
+      g.fillRect(x + 17, y + 91, 216, 5);
+      g.fillStyle = vehicle.health < vehicle.maxHealth * 0.3 ? '#d75d47' : '#6ea68e';
+      g.fillRect(x + 17, y + 91, 216 * vehicle.health / vehicle.maxHealth, 5);
+    } else {
+      const text = `E  ENTER ${nearby.name.toUpperCase()}`;
+      g.font = '600 14px sans-serif';
+      const width = g.measureText(text).width + 34;
+      const x = (window.innerWidth - width) / 2;
+      const y = window.innerHeight - 68;
+      g.fillStyle = 'rgba(13, 25, 29, 0.76)';
+      g.fillRect(x, y, width, 38);
+      g.fillStyle = '#f0dcaa';
+      g.fillText(text, x + 17, y + 25);
+    }
+    g.restore();
   },
 });
 
@@ -77,7 +128,9 @@ const metrics = {
   drawCalls: 0,
   triangles: 0,
 };
-window.__cobalto = { city, scene: stage, player, input, systems, context, metrics, registerSystem };
+window.__cobalto = {
+  city, scene: stage, player, vehicles, traffic, peds, input, systems, context, metrics, registerSystem,
+};
 
 let accumulator = 0;
 let previousTime = performance.now();
@@ -89,12 +142,14 @@ let titleHidden = false;
 function fixedUpdate() {
   context.actions = input.read();
   context.time += STEP;
+  clock.time = context.time;
+  clock.step += 1;
   for (const system of systems.values()) system.update?.(STEP, context);
   accumulator -= STEP;
   metrics.fixedSteps += 1;
   if (player.state.district !== announcedDistrict) {
     announcedDistrict = player.state.district;
-    status.textContent = `Walking through ${announcedDistrict}.`;
+    status.textContent = `${player.state.vehicle ? 'Driving' : 'Walking'} through ${announcedDistrict}.`;
   }
   if (context.actions.pausePressed) status.textContent = 'Mouse released. Click the city to resume mouse look.';
 }
@@ -139,8 +194,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 canvas.addEventListener('pointerdown', () => {
-  status.textContent = `Exploring ${player.state.district}. WASD to walk, Shift to sprint, Space to jump.`;
+  status.textContent = player.state.vehicle
+    ? 'W/S throttle and reverse, A/D steer, Space handbrake, E step out.'
+    : 'WASD to walk, Shift to sprint, Space to jump, E to enter a nearby vehicle.';
 });
 
-status.textContent = 'Bahía Cobalto ready. Click the city for mouse look. W A S D to walk, Shift to sprint, Space to jump.';
+status.textContent = 'Bahía Cobalto ready. Click for mouse look. WASD walk, E enter/exit, Space jump or handbrake.';
 requestAnimationFrame(frame);

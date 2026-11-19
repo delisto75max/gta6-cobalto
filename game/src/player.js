@@ -96,6 +96,8 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     grounded: true,
     health: 100,
     district: city.districtAt(spawn.x, spawn.z),
+    vehicle: null,
+    driving: false,
   };
   const previousPosition = state.position.clone();
   const previousCameraPosition = new THREE.Vector3();
@@ -167,6 +169,10 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
 
   function update(dt, context) {
     const actions = context.actions;
+    if (state.vehicle) {
+      previousPosition.copy(state.position);
+      return;
+    }
     elapsed += dt;
     previousPosition.copy(state.position);
     previousCameraPosition.copy(currentCameraPosition);
@@ -238,6 +244,7 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
   }
 
   function render(alpha) {
+    if (state.vehicle) return;
     renderPosition.lerpVectors(previousPosition, state.position, alpha);
     character.group.position.copy(renderPosition);
     camera.position.lerpVectors(previousCameraPosition, currentCameraPosition, alpha);
@@ -245,6 +252,29 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     camera.position.y = Math.max(camera.position.y, ground + CAMERA.minGroundClearance);
     calculateCameraTarget(renderPosition);
     camera.lookAt(target);
+  }
+
+  function enterVehicle(vehicle) {
+    state.vehicle = vehicle;
+    state.driving = true;
+    state.velocity.set(0, 0, 0);
+    verticalVelocity = 0;
+    character.group.visible = false;
+  }
+
+  function exitVehicle(destination = state.position) {
+    state.vehicle = null;
+    state.driving = false;
+    state.position.set(destination.x, city.groundHeightAt(destination.x, destination.z), destination.z);
+    state.velocity.set(0, 0, 0);
+    state.heading = destination.heading ?? state.heading;
+    state.district = city.districtAt(state.position.x, state.position.z);
+    yaw = state.heading;
+    verticalVelocity = 0;
+    state.grounded = true;
+    previousPosition.copy(state.position);
+    character.group.visible = true;
+    snapCamera();
   }
 
   function teleport(destination) {
@@ -258,5 +288,5 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
   }
 
   snapCamera();
-  return { state, update, render, teleport };
+  return { state, mesh: character.group, update, render, enterVehicle, exitVehicle, teleport };
 }

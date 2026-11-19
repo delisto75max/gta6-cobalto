@@ -57,6 +57,78 @@ export const PLAYER = {
   walkCycleSpeed: 9.5,
 };
 
+export const VEHICLES = {
+  enterDistance: 4,
+  parkedCount: 24,
+  parkedRadius: 430,
+  recycleDistance: 460,
+  collisionSamples: 3,
+  types: [
+    {
+      key: 'viento', name: 'Viento GT', style: 'coupe', width: 1.88, length: 4.28,
+      wheelbase: 2.62, wheelRadius: 0.35, wheelWidth: 0.25, maxSpeed: 53, reverseSpeed: 11,
+      engine: 15.8, brake: 27, drag: 0.006, rollingResistance: 0.52, steering: 0.64,
+      grip: 9.2, handbrakeGrip: 0.72, health: 100,
+    },
+    {
+      key: 'tiburon', name: 'Tiburón', style: 'muscle', width: 1.96, length: 4.72,
+      wheelbase: 2.82, wheelRadius: 0.38, wheelWidth: 0.28, maxSpeed: 47, reverseSpeed: 10,
+      engine: 13.2, brake: 25, drag: 0.007, rollingResistance: 0.58, steering: 0.58,
+      grip: 7.7, handbrakeGrip: 0.58, health: 125,
+    },
+    {
+      key: 'marea', name: 'Marea 4x4', style: 'suv', width: 2.02, length: 4.55,
+      wheelbase: 2.72, wheelRadius: 0.43, wheelWidth: 0.29, maxSpeed: 38, reverseSpeed: 9,
+      engine: 10.4, brake: 23, drag: 0.008, rollingResistance: 0.7, steering: 0.56,
+      grip: 9.8, handbrakeGrip: 0.9, health: 155,
+    },
+    {
+      key: 'cangrejo', name: 'Cangrejo', style: 'hatchback', width: 1.73, length: 3.72,
+      wheelbase: 2.28, wheelRadius: 0.32, wheelWidth: 0.22, maxSpeed: 34, reverseSpeed: 8,
+      engine: 8.8, brake: 21, drag: 0.009, rollingResistance: 0.74, steering: 0.62,
+      grip: 8.4, handbrakeGrip: 0.85, health: 85,
+    },
+    {
+      key: 'mula', name: 'Mula', style: 'van', width: 2.06, length: 5.08,
+      wheelbase: 3.02, wheelRadius: 0.39, wheelWidth: 0.27, maxSpeed: 31, reverseSpeed: 7,
+      engine: 8.1, brake: 21, drag: 0.01, rollingResistance: 0.82, steering: 0.5,
+      grip: 10.2, handbrakeGrip: 1.1, health: 145,
+    },
+    {
+      key: 'rayo', name: 'Rayo 250', style: 'motorcycle', width: 0.78, length: 2.18,
+      wheelbase: 1.46, wheelRadius: 0.34, wheelWidth: 0.14, maxSpeed: 43, reverseSpeed: 4,
+      engine: 14.4, brake: 25, drag: 0.007, rollingResistance: 0.45, steering: 0.48,
+      grip: 11.5, handbrakeGrip: 1.4, health: 65,
+    },
+  ],
+};
+
+export const TRAFFIC = {
+  count: 24,
+  laneOffset: 2.45,
+  minimumSpeed: 9,
+  maximumSpeed: 16.5,
+  acceleration: 4.2,
+  braking: 10.5,
+  visibilityDistance: 355,
+  respawnMinimumDistance: 85,
+  respawnMaximumDistance: 275,
+};
+
+export const PEDESTRIANS = {
+  count: 52,
+  walkSpeedMin: 1.15,
+  walkSpeedMax: 1.75,
+  runSpeed: 4.35,
+  sidewalkOffset: 51.7,
+  recycleDistance: 345,
+  respawnDistance: 235,
+  speedingCarRadius: 15,
+  speedingCarThreshold: 12,
+  gunshotRadius: 72,
+  fearDuration: 6.5,
+};
+
 export const CAMERA = {
   fov: 59,
   near: 0.12,
@@ -73,6 +145,14 @@ export const CAMERA = {
   wheelSensitivity: 0.008,
   minGroundClearance: 0.65,
   collisionPadding: 0.24,
+  chaseDistance: 8.8,
+  chaseSpeedDistance: 0.115,
+  chaseHeight: 3.7,
+  chaseTargetHeight: 1.15,
+  chaseLookAhead: 4.5,
+  chaseSpeedLookAhead: 0.15,
+  chaseSmoothing: 7.5,
+  chaseYawSmoothing: 6.5,
 };
 
 export const INPUT = {
