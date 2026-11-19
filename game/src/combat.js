@@ -246,7 +246,9 @@ function createAudio(seed) {
 export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed = city.seed) {
   const random = mulberry32((seed ^ 0xc0b47) | 0);
   const audio = createAudio(seed);
-  const inventory = COMBAT.weapons.map((spec) => ({ spec, ammo: spec.magazineSize, reserve: spec.startingReserve }));
+  const inventory = COMBAT.weapons.map((spec) => ({
+    spec, ammo: spec.magazineSize, reserve: spec.startingReserve, unlocked: spec.slot === 1,
+  }));
   const weaponModels = inventory.map(({ spec }) => {
     const model = makeWeaponModel(spec);
     model.visible = false;
@@ -411,6 +413,17 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
         }
       }
     }
+    if (!options.excludeMissionTargets) {
+      for (const actor of context?.missions?.targets || []) {
+        if (!actor.alive || actor === ignore) continue;
+        const distance = verticalTargetDistance(rayOrigin, rayDirection, actor.position, nearest, 0.42);
+        if (distance !== null && distance < nearest) {
+          nearest = distance;
+          kind = 'missionTarget';
+          target = actor;
+        }
+      }
+    }
     if (options.includePlayer && !player.state.dead) {
       const distance = verticalTargetDistance(rayOrigin, rayDirection, player.state.position, nearest, PLAYER.radius);
       if (distance !== null && distance < nearest) {
@@ -495,6 +508,9 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
     } else if (hit.kind === 'officer') {
       stats.officerHits += 1;
       context?.police?.damageOfficer(hit.target, damage, 'player');
+    } else if (hit.kind === 'missionTarget') {
+      const result = context?.missions?.damageTarget(hit.target, damage, 'player');
+      if (result?.killed) stats.kills += 1;
     } else if (hit.kind === 'vehicle') {
       vehicleSystem.damage(hit.target, damage * 0.48);
       addSparks(hit.point, 3);
@@ -565,7 +581,7 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
     direction.copy(center).sub(origin).normalize();
     spreadDirection(direction, POLICE.officerSpread, pelletDirection);
     const hit = traceShot(origin, pelletDirection, POLICE.officerRange, {
-      ignoreTarget: officer, includePlayer: true, excludeOfficers: true, excludePeds: true,
+      ignoreTarget: officer, includePlayer: true, excludeOfficers: true, excludeMissionTargets: true, excludePeds: true,
     });
     stats.officerShots += 1;
     if (hit.kind === 'player') damagePlayer(POLICE.officerDamage, { source: 'PDC' });
@@ -582,7 +598,7 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
     let next = -1;
     if (typeof slotOrKey === 'number') next = inventory.findIndex(({ spec }) => spec.slot === slotOrKey);
     else next = inventory.findIndex(({ spec }) => spec.key === slotOrKey || spec.name === slotOrKey);
-    if (next < 0 || next === currentIndex) return false;
+    if (next < 0 || next === currentIndex || !inventory[next].unlocked) return false;
     weaponModels[currentIndex].visible = false;
     currentIndex = next;
     weaponModels[currentIndex].visible = true;
@@ -593,8 +609,30 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
   }
 
   function cycleWeapon(directionSign) {
-    const next = (currentIndex + Math.sign(directionSign) + inventory.length) % inventory.length;
-    return setWeapon(inventory[next].spec.slot);
+    for (let offset = 1; offset <= inventory.length; offset += 1) {
+      const next = (currentIndex + Math.sign(directionSign) * offset + inventory.length * 2) % inventory.length;
+      if (inventory[next].unlocked) return setWeapon(inventory[next].spec.slot);
+    }
+    return false;
+  }
+
+  function unlockWeapon(slotOrKey) {
+    const held = inventory.find(({ spec }) => spec.slot === slotOrKey || spec.key === slotOrKey || spec.name === slotOrKey);
+    if (!held) return false;
+    held.unlocked = true;
+    return true;
+  }
+
+  function setAmmo(slotOrKey, ammo, reserve) {
+    const held = inventory.find(({ spec }) => spec.slot === slotOrKey || spec.key === slotOrKey || spec.name === slotOrKey);
+    if (!held || !Number.isFinite(ammo)) return false;
+    held.ammo = THREE.MathUtils.clamp(Math.round(ammo), 0, held.spec.magazineSize);
+    if (Number.isFinite(reserve)) held.reserve = Math.max(0, Math.round(reserve));
+    if (held === current() && held.ammo >= held.spec.magazineSize) {
+      reloading = false;
+      reloadTimer = 0;
+    }
+    return true;
   }
 
   function startReload() {
@@ -642,8 +680,9 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
   }
 
   function getInventory() {
-    return inventory.map(({ spec, ammo, reserve }) => ({
+    return inventory.map(({ spec, ammo, reserve, unlocked }) => ({
       key: spec.key, name: spec.name, slot: spec.slot, magazineSize: spec.magazineSize, ammo, reserve,
+      unlocked: Boolean(unlocked),
     }));
   }
 
@@ -797,6 +836,8 @@ export function createCombat(stage, city, player, vehicleSystem, pedSystem, seed
     get aiming() { return aiming; },
     get hitMarker() { return hitMarker; },
     setWeapon,
+    unlockWeapon,
+    setAmmo,
     cycleWeapon,
     reload: startReload,
     addAmmo,

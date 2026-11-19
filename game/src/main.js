@@ -1,6 +1,6 @@
 // Boot, system registry and the single fixed-step loop. Later gameplay systems register here
 // without replacing the loop; screenshot staging uses the query hook and the same real scene.
-import { MAX_FRAME, RENDER, SEED, STEP } from './config.js';
+import { MAX_FRAME, PLAYER, RENDER, SEED, STEP } from './config.js';
 import { generateCity } from './city.js';
 import { createInput } from './input.js';
 import { createPlayer } from './player.js';
@@ -10,6 +10,8 @@ import { createTraffic } from './traffic.js';
 import { createPeds } from './peds.js';
 import { createCombat } from './combat.js';
 import { createPolice } from './police.js';
+import { createMissions } from './missions.js';
+import { createSave } from './save.js';
 
 const canvas = document.getElementById('game');
 const hudCanvas = document.getElementById('hud');
@@ -43,9 +45,21 @@ const traffic = createTraffic(city, vehicles, seed);
 const peds = createPeds(stage, city, seed);
 const combat = createCombat(stage, city, player, vehicles, peds, seed);
 const police = createPolice(stage, city, player, vehicles, combat, seed);
+const progress = {
+  money: PLAYER.startingMoney,
+  respect: 0,
+  mission: 0,
+  completed: [],
+  weapon: combat.weaponKey,
+  ammo: combat.ammo,
+  unlocks: [],
+  ledgerChoice: null,
+};
+player.state.money = progress.money;
+const missions = createMissions(stage, city, progress);
 const input = createInput(canvas);
 const systems = new Map();
-const clock = { time: 0, dt: STEP, step: 0 };
+const clock = { time: 0, dt: STEP, step: 0, hour: 17.5 };
 const context = {
   city,
   scene: stage,
@@ -55,6 +69,10 @@ const context = {
   peds,
   combat,
   police,
+  missions,
+  progress,
+  radio: { station: 'Cobalto 104.7' },
+  save: null,
   camera: stage.camera,
   clock,
   actions: input.actions,
@@ -63,6 +81,9 @@ const context = {
   shot: shotName,
   time: 0,
 };
+const save = createSave(context);
+context.save = save;
+missions.update(0, context);
 
 function registerSystem(name, system) {
   if (!name || systems.has(name)) throw new Error(`System name already registered: ${name}`);
@@ -76,6 +97,8 @@ registerSystem('traffic', traffic);
 registerSystem('peds', peds);
 registerSystem('police', police);
 registerSystem('combat', combat);
+registerSystem('missions', missions);
+registerSystem('save', save);
 registerSystem('scene', { update: stage.update });
 registerSystem('hud', {
   update() {},
@@ -137,7 +160,8 @@ const metrics = {
   triangles: 0,
 };
 window.__cobalto = {
-  city, scene: stage, player, vehicles, traffic, peds, combat, police, input, systems, context, metrics, registerSystem,
+  city, scene: stage, player, vehicles, traffic, peds, combat, police, missions, save, progress,
+  input, systems, context, metrics, registerSystem,
 };
 
 let accumulator = 0;
@@ -152,6 +176,7 @@ function fixedUpdate() {
   context.time += STEP;
   clock.time = context.time;
   clock.step += 1;
+  clock.hour = (clock.hour + STEP / 60) % 24;
   for (const system of systems.values()) system.update?.(STEP, context);
   accumulator -= STEP;
   metrics.fixedSteps += 1;

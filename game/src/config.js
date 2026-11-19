@@ -202,6 +202,22 @@ export const POLICE = {
   hospital: { x: CITY.pitch / 2, z: -103, heading: 0 },
 };
 
+export const MISSIONS = {
+  triggerOnFoot: 3.5,
+  triggerVehicle: 7,
+  safehouseRadius: 4.5,
+  dialogueSeconds: 4.5,
+  tailMinimum: 20,
+  tailMaximum: 60,
+  abandonDistance: 145,
+  abandonSeconds: 6,
+  chaseHealthRatio: 0.55,
+  chaseStoppedSeconds: 3,
+  enemyMoveSpeed: 2.65,
+  enemyRange: 55,
+  enemyFireInterval: 1.05,
+};
+
 export const CAMERA = {
   fov: 59,
   near: 0.12,

@@ -561,7 +561,12 @@ export function createPolice(stage, city, player, vehicleSystem, combat, seed = 
     clearWanted();
     if (busted) combat.reduceAmmoAfterArrest();
     combat.restorePlayer(player.state.maxHealth, busted ? player.state.armour : 0);
-    player.state.money = Math.max(0, (player.state.money ?? 0) - outcomeFee);
+    if (context?.progress) {
+      context.progress.money = Math.max(0, context.progress.money - outcomeFee);
+      player.state.money = context.progress.money;
+    } else {
+      player.state.money = Math.max(0, (player.state.money ?? 0) - outcomeFee);
+    }
     player.teleport(busted ? POLICE.station : POLICE.hospital);
     player.mesh.rotation.z = 0;
     outcomeRespawned = true;
