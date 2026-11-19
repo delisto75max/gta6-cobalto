@@ -1,9 +1,8 @@
-// Screenshot runner for the game: node scripts/shoot.mjs [1|2|3|4|all] [--port 8080] [--out screenshots]
-// Serves nothing itself: start `node serve.ts --port 8080` first. Launches headless Chromium with a
-// debugging port, opens ?shot=N, waits for window.__shotReady, captures 1280x720 JPEG and keeps it
-// under 256 KiB (the make.fun gate's limit). Node 22, standard library only.
+// Screenshot runner: node scripts/shoot.mjs [1|2|3|4|all] [--port 8080] [--out screenshots]
+// Launches headless Chromium, opens ?shot=N, waits for window.__shotReady, prints window.__shotDebug
+// (the scene's own acceptance numbers), captures 1280x720 JPEG under 256 KiB. Node 22, stdlib only.
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -32,10 +31,7 @@ const fail = (msg) => { console.error(`shoot: ${msg}`); try { proc.kill('SIGKILL
 
 async function version() {
   for (let i = 0; i < 100; i += 1) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${dbg}/json/version`);
-      if (res.ok) return await res.json();
-    } catch {}
+    try { const res = await fetch(`http://127.0.0.1:${dbg}/json/version`); if (res.ok) return await res.json(); } catch {}
     await sleep(100);
   }
   fail('Chromium did not open its debugging port');
@@ -55,18 +51,13 @@ async function openWs(url) {
   return new CDP(ws);
 }
 
-async function newTarget(url) {
-  const res = await fetch(`http://127.0.0.1:${dbg}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' });
-  if (!res.ok) throw new Error(`/json/new ${res.status}`);
-  return await res.json();
-}
-
 const v = await version();
 console.log(`chromium ${v.Browser}`);
 
 for (const n of shots) {
   const url = `http://127.0.0.1:${httpPort}/?shot=${n}`;
-  const target = await newTarget(url);
+  const res = await fetch(`http://127.0.0.1:${dbg}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' });
+  const target = await res.json();
   const cdp = await openWs(target.webSocketDebuggerUrl);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
@@ -82,8 +73,10 @@ for (const n of shots) {
   }
   if (!ready) {
     const err = await cdp.send('Runtime.evaluate', { expression: '(window.__lastError||"no __shotReady")+" | "+document.title', returnByValue: true }).catch(() => null);
-    console.log(`shot ${n}: not ready after 45 s (${err?.result?.value ?? 'no value'}) — capturing anyway`);
+    console.log(`shot ${n}: NOT READY after 45 s (${err?.result?.value ?? 'no value'}) — capturing anyway`);
   }
+  const dbgInfo = await cdp.send('Runtime.evaluate', { expression: 'JSON.stringify(window.__shotDebug||null)', returnByValue: true }).catch(() => null);
+  console.log(`shot ${n}: debug=${dbgInfo?.result?.value ?? 'null'}`);
   await sleep(400);
   let quality = 86;
   let bytes;
