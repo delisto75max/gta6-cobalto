@@ -1,4 +1,4 @@
-# build output and local scratch — never part of the entry snapshot
+# Build output and local scratch — never part of the entry snapshot.
 out/
 node_modules/
 *.log
@@ -7,13 +7,15 @@ node_modules/
 .makefun/*.tmp
 screenshots/.cache/
 
-# editor / OS noise
+# Editor / OS noise.
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# local browser profiles used by the shot and check runners
+# Local browser profiles used by the shot, check and smoke runners.
 /tmp/mf-shot-profile-*
 /tmp/mf-check-profile-*
+/tmp/mf-smoke-profile-*

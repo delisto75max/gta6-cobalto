@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COBALTO — Bahía Caliente</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #070b12; overflow: hidden; }
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #frame { position: relative; width: min(100vw, 177.7778vh); height: min(56.25vw, 100vh); background: #070b12; box-shadow: 0 0 80px rgba(0,0,0,.8); overflow: hidden; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { pointer-events: none; }
+  #boot { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 60%, #173544, #070b12 70%); color: #f3dfbd; font: 600 13px/1.5 system-ui, sans-serif; letter-spacing: .32em; text-transform: uppercase; transition: opacity .45s; }
+  #boot.gone { opacity: 0; pointer-events: none; }
+  #boot b { display: block; font-size: 34px; letter-spacing: .2em; margin-bottom: 10px; color: #ffcf88; }
+</style>
+</head>
+<body>
+<div id="stage"><div id="frame">
+  <canvas id="view" width="1280" height="720"></canvas>
+  <canvas id="hud" width="1280" height="720"></canvas>
+  <div id="boot"><div><b>COBALTO</b>Bahía Caliente · loading the coast</div></div>
+</div></div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module">
+  window.__lastError = null;
+  window.addEventListener('error', (e) => { window.__lastError = String(e.message || e.error || 'error'); });
+  window.addEventListener('unhandledrejection', (e) => { window.__lastError = String(e.reason || 'rejection'); });
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
