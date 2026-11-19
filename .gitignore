@@ -1,2 +1,19 @@
+# build output and local scratch — never part of the entry snapshot
 out/
 node_modules/
+*.log
+*.pid
+.makefun/compress.json
+.makefun/*.tmp
+screenshots/.cache/
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# local browser profiles used by the shot and check runners
+/tmp/mf-shot-profile-*
+/tmp/mf-check-profile-*
