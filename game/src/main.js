@@ -1,134 +1,146 @@
-// Boot and the one loop: input is read every frame, the world advances in fixed 1/60 s steps
-// (several in a slow frame, none in a fast one), and the renderer paints what is there. The game
-// moves between four screens: title, play, paused and game over.
-//
-// ?seed=N fixes the falling pattern. ?shot=start|play|end (with &seed=N) stages that scene
-// instead of running the loop, paints it twice and sets window.__shotReady for a screenshot.
-import { BEST_KEY, LIVES, STEP } from './config.js';
-import { createRandom } from './random.js';
-import { createWorld, EVENT_HIT, EVENT_OVER } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, createInput } from './input.js';
-import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-import { stageShot } from './shots.js';
-
-/** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped, not replayed. */
-const MAX_FRAME = 0.25;
-
-const params = new URLSearchParams(window.location.search);
-const shot = params.get('shot');
-const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
-const seed = Number.isInteger(seedParam) ? seedParam : Math.floor(Math.random() * 4294967296);
+// Boot, system registry and the single fixed-step loop. Later gameplay systems register here
+// without replacing the loop; screenshot staging uses the query hook and the same real scene.
+import { MAX_FRAME, RENDER, SEED, STEP } from './config.js';
+import { generateCity } from './city.js';
+import { createInput } from './input.js';
+import { createPlayer } from './player.js';
+import { createScene } from './scene.js';
 
 const canvas = document.getElementById('game');
+const hudCanvas = document.getElementById('hud');
+const hudContext = hudCanvas.getContext('2d');
 const status = document.getElementById('status');
-const world = createWorld(createRandom(seed));
-const renderer = createRenderer(canvas);
+const title = document.getElementById('title');
+const errorPanel = document.getElementById('error');
 
-function readBest() {
-  try {
-    return Number.parseInt(window.localStorage.getItem(BEST_KEY) ?? '0', 10) || 0;
-  } catch {
-    return 0;
-  }
+function showError(error) {
+  const text = error?.stack || error?.message || String(error);
+  errorPanel.textContent = `COBALTO could not continue\n\n${text}`;
+  errorPanel.hidden = false;
+  status.textContent = `Game error. ${error?.message || String(error)}`;
 }
 
-function saveBest(value) {
-  try {
-    window.localStorage.setItem(BEST_KEY, String(value));
-  } catch {
-    // Storage can be off (private windows): the best score then lasts this visit only.
-  }
+window.addEventListener('error', (event) => showError(event.error || event.message));
+window.addEventListener('unhandledrejection', (event) => showError(event.reason));
+
+const parameters = new URLSearchParams(window.location.search);
+const requestedSeed = Number.parseInt(parameters.get('seed') ?? '', 10);
+const seed = Number.isInteger(requestedSeed) ? requestedSeed : SEED;
+const shotName = parameters.get('shot');
+window.__shotReady = false;
+window.__shotName = shotName || null;
+
+const city = generateCity(seed);
+const stage = createScene(canvas, city);
+const player = createPlayer(stage, city);
+const input = createInput(canvas);
+const systems = new Map();
+const context = {
+  city,
+  scene: stage,
+  player,
+  actions: input.actions,
+  systems,
+  seed,
+  shot: shotName,
+  time: 0,
+};
+
+function registerSystem(name, system) {
+  if (!name || systems.has(name)) throw new Error(`System name already registered: ${name}`);
+  systems.set(name, system);
+  return system;
 }
 
-function runShot(name) {
-  const scene = stageShot(name, world);
-  let painted = 0;
-  function paint() {
-    renderer.draw(world.state, scene.screen, scene.best);
-    painted += 1;
-    if (painted < 2) requestAnimationFrame(paint);
-    else window.__shotReady = true;
-  }
-  requestAnimationFrame(paint);
+registerSystem('player', player);
+registerSystem('scene', { update: stage.update });
+registerSystem('hud', {
+  update() {},
+  drawHUD() {
+    // The real HUD arrives with missions; this pass-through keeps canvas ownership here.
+  },
+});
+
+function resizeHUD() {
+  const ratio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
+  hudCanvas.width = Math.round(window.innerWidth * ratio);
+  hudCanvas.height = Math.round(window.innerHeight * ratio);
 }
 
-function runGame() {
-  const input = createInput(canvas);
-  let screen = SCREEN_TITLE;
-  let best = readBest();
-  let accumulator = 0;
-  let last = performance.now();
+window.addEventListener('resize', resizeHUD);
+resizeHUD();
 
-  // Screen readers (and anyone watching the page's text) hear the screen changes and each hit.
-  function announce(message) {
-    status.textContent = message;
+const metrics = {
+  fps: 0,
+  frames: 0,
+  fixedSteps: 0,
+  drawCalls: 0,
+  triangles: 0,
+};
+window.__cobalto = { city, scene: stage, player, input, systems, context, metrics, registerSystem };
+
+let accumulator = 0;
+let previousTime = performance.now();
+let fpsTime = previousTime;
+let paintedFrames = 0;
+let announcedDistrict = player.state.district;
+let titleHidden = false;
+
+function fixedUpdate() {
+  context.actions = input.read();
+  context.time += STEP;
+  for (const system of systems.values()) system.update?.(STEP, context);
+  accumulator -= STEP;
+  metrics.fixedSteps += 1;
+  if (player.state.district !== announcedDistrict) {
+    announcedDistrict = player.state.district;
+    status.textContent = `Walking through ${announcedDistrict}.`;
   }
+  if (context.actions.pausePressed) status.textContent = 'Mouse released. Click the city to resume mouse look.';
+}
 
-  function startGame() {
-    world.reset();
-    accumulator = 0;
-    screen = SCREEN_PLAY;
-    announce(`Playing. ${LIVES} lives.`);
-  }
+function drawHUD() {
+  hudContext.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  for (const system of systems.values()) system.drawHUD?.(hudContext, context);
+}
 
-  function endGame() {
-    screen = SCREEN_OVER;
-    if (world.state.score > best) {
-      best = world.state.score;
-      saveBest(best);
-    }
-    announce(`Game over. Score ${world.state.score}. Best ${best}.`);
-  }
-
-  function handleActions() {
-    const actions = input.takeActions();
-    if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER)) startGame();
-    else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    } else if (actions & (ACTION_PAUSE | ACTION_CONFIRM) && screen === SCREEN_PAUSED) {
-      screen = SCREEN_PLAY;
-      announce('Playing.');
-    }
-  }
-
-  function step() {
-    if (screen === SCREEN_TITLE) {
-      world.step(STEP, 0, true);
-      return;
-    }
-    const events = world.step(STEP, input.direction(), false);
-    if (events & EVENT_OVER) endGame();
-    else if (events & EVENT_HIT) announce(world.state.lives === 1 ? 'Hit. 1 life left.' : `Hit. ${world.state.lives} lives left.`);
-  }
-
-  function frame(now) {
-    requestAnimationFrame(frame);
-    accumulator += Math.min((now - last) / 1000, MAX_FRAME);
-    last = now;
-    handleActions();
-    if (screen === SCREEN_TITLE || screen === SCREEN_PLAY) {
-      while (accumulator >= STEP && (screen === SCREEN_TITLE || screen === SCREEN_PLAY)) {
-        step();
-        accumulator -= STEP;
-      }
-    } else {
-      accumulator = 0;
-    }
-    renderer.draw(world.state, screen, best);
-  }
-
-  // Leaving the tab pauses a running game rather than letting blocks fall unseen.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && screen === SCREEN_PLAY) {
-      screen = SCREEN_PAUSED;
-      announce('Paused.');
-    }
-  });
-
-  announce('Block Dodger. Press Space or click to start.');
+function frame(now) {
   requestAnimationFrame(frame);
+  const frameSeconds = Math.min(MAX_FRAME, Math.max(0, (now - previousTime) / 1000));
+  previousTime = now;
+  accumulator += frameSeconds;
+  while (accumulator >= STEP) fixedUpdate();
+
+  const alpha = accumulator / STEP;
+  for (const system of systems.values()) system.render?.(alpha, context);
+  stage.render();
+  drawHUD();
+  paintedFrames += 1;
+  metrics.frames += 1;
+  if (now - fpsTime >= RENDER.fpsSampleMilliseconds) {
+    metrics.fps = metrics.frames * 1000 / (now - fpsTime);
+    metrics.drawCalls = stage.renderer.info.render.calls;
+    metrics.triangles = stage.renderer.info.render.triangles;
+    metrics.frames = 0;
+    fpsTime = now;
+  }
+
+  if (shotName && paintedFrames >= 2) window.__shotReady = true;
+  if (paintedFrames >= 2 && !titleHidden) {
+    titleHidden = true;
+    title.classList.add('ready');
+    window.setTimeout(() => { title.hidden = true; }, 650);
+  }
 }
 
-if (shot) runShot(shot);
-else runGame();
+document.addEventListener('visibilitychange', () => {
+  accumulator = 0;
+  previousTime = performance.now();
+});
+
+canvas.addEventListener('pointerdown', () => {
+  status.textContent = `Exploring ${player.state.district}. WASD to walk, Shift to sprint, Space to jump.`;
+});
+
+status.textContent = 'Bahía Cobalto ready. Click the city for mouse look. W A S D to walk, Shift to sprint, Space to jump.';
+requestAnimationFrame(frame);

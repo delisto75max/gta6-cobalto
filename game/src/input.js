@@ -1,53 +1,115 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// Keyboard, mouse and pointer-lock input. read() returns the shared actions object: held
+// controls remain true, while look deltas and one-shot presses last for exactly one fixed step.
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
-
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
+const CONTROL_CODES = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD',
+  'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight',
+  'ShiftLeft', 'ShiftRight', 'Space', 'KeyE', 'Escape', 'Tab',
+]);
 
 export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
+  const held = new Set();
+  const pressed = new Set();
+  const mouseButtons = new Set();
+  let lookX = 0;
+  let lookY = 0;
+  let wheel = 0;
+  let pointerLocked = false;
+
+  const actions = {
+    forward: 0,
+    right: 0,
+    sprint: false,
+    jump: false,
+    jumpPressed: false,
+    interactPressed: false,
+    pausePressed: false,
+    map: false,
+    mapPressed: false,
+    fire: false,
+    aim: false,
+    lookX: 0,
+    lookY: 0,
+    wheel: 0,
+    pointerLocked: false,
+  };
 
   window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
+    if (!CONTROL_CODES.has(event.code)) return;
     event.preventDefault();
-  });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
-  });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
+    if (!event.repeat && !held.has(event.code)) pressed.add(event.code);
+    held.add(event.code);
   });
 
-  return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
-    },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
-    },
-  };
+  window.addEventListener('keyup', (event) => {
+    if (!CONTROL_CODES.has(event.code)) return;
+    event.preventDefault();
+    held.delete(event.code);
+  });
+
+  window.addEventListener('blur', () => {
+    held.clear();
+    pressed.clear();
+    mouseButtons.clear();
+  });
+
+  document.addEventListener('pointerlockchange', () => {
+    pointerLocked = document.pointerLockElement === target;
+    mouseButtons.clear();
+  });
+
+  document.addEventListener('mousemove', (event) => {
+    if (!pointerLocked) return;
+    lookX += event.movementX;
+    lookY += event.movementY;
+  });
+
+  target.addEventListener('pointerdown', (event) => {
+    mouseButtons.add(event.button);
+    if (!pointerLocked) {
+      const request = target.requestPointerLock();
+      if (request && typeof request.catch === 'function') request.catch(() => {});
+    }
+  });
+
+  window.addEventListener('pointerup', (event) => {
+    mouseButtons.delete(event.button);
+  });
+
+  target.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    wheel += event.deltaY;
+  }, { passive: false });
+
+  target.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  function isHeld(...codes) {
+    return codes.some((code) => held.has(code));
+  }
+
+  function read() {
+    actions.forward = Number(isHeld('KeyW', 'ArrowUp')) - Number(isHeld('KeyS', 'ArrowDown'));
+    actions.right = Number(isHeld('KeyD', 'ArrowRight')) - Number(isHeld('KeyA', 'ArrowLeft'));
+    actions.sprint = isHeld('ShiftLeft', 'ShiftRight');
+    actions.jump = held.has('Space');
+    actions.jumpPressed = pressed.has('Space');
+    actions.interactPressed = pressed.has('KeyE');
+    actions.pausePressed = pressed.has('Escape');
+    actions.map = held.has('Tab');
+    actions.mapPressed = pressed.has('Tab');
+    actions.fire = mouseButtons.has(0) && pointerLocked;
+    actions.aim = mouseButtons.has(2);
+    actions.lookX = lookX;
+    actions.lookY = lookY;
+    actions.wheel = wheel;
+    actions.pointerLocked = pointerLocked;
+
+    pressed.clear();
+    lookX = 0;
+    lookY = 0;
+    wheel = 0;
+    return actions;
+  }
+
+  return { actions, read, isPointerLocked: () => pointerLocked };
 }
