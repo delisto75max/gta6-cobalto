@@ -8,6 +8,8 @@ import { createScene } from './scene.js';
 import { createVehicles } from './vehicles.js';
 import { createTraffic } from './traffic.js';
 import { createPeds } from './peds.js';
+import { createCombat } from './combat.js';
+import { createPolice } from './police.js';
 
 const canvas = document.getElementById('game');
 const hudCanvas = document.getElementById('hud');
@@ -39,6 +41,8 @@ const player = createPlayer(stage, city);
 const vehicles = createVehicles(stage, city, player, seed);
 const traffic = createTraffic(city, vehicles, seed);
 const peds = createPeds(stage, city, seed);
+const combat = createCombat(stage, city, player, vehicles, peds, seed);
+const police = createPolice(stage, city, player, vehicles, combat, seed);
 const input = createInput(canvas);
 const systems = new Map();
 const clock = { time: 0, dt: STEP, step: 0 };
@@ -49,6 +53,8 @@ const context = {
   vehicles,
   traffic,
   peds,
+  combat,
+  police,
   camera: stage.camera,
   clock,
   actions: input.actions,
@@ -68,6 +74,8 @@ registerSystem('player', player);
 registerSystem('vehicles', vehicles);
 registerSystem('traffic', traffic);
 registerSystem('peds', peds);
+registerSystem('police', police);
+registerSystem('combat', combat);
 registerSystem('scene', { update: stage.update });
 registerSystem('hud', {
   update() {},
@@ -129,7 +137,7 @@ const metrics = {
   triangles: 0,
 };
 window.__cobalto = {
-  city, scene: stage, player, vehicles, traffic, peds, input, systems, context, metrics, registerSystem,
+  city, scene: stage, player, vehicles, traffic, peds, combat, police, input, systems, context, metrics, registerSystem,
 };
 
 let accumulator = 0;
@@ -195,9 +203,9 @@ document.addEventListener('visibilitychange', () => {
 
 canvas.addEventListener('pointerdown', () => {
   status.textContent = player.state.vehicle
-    ? 'W/S throttle and reverse, A/D steer, Space handbrake, E step out.'
-    : 'WASD to walk, Shift to sprint, Space to jump, E to enter a nearby vehicle.';
+    ? 'W/S drive, A/D steer, RMB aim, LMB fire from the window, E step out.'
+    : 'WASD move, RMB aim, LMB fire, R reload, 1/2/3 or wheel switch, E enter a vehicle.';
 });
 
-status.textContent = 'Bahía Cobalto ready. Click for mouse look. WASD walk, E enter/exit, Space jump or handbrake.';
+status.textContent = 'Bahía Cobalto ready. Click for mouse look. WASD move, E enter/exit, RMB aim, LMB fire, R reload, 1/2/3 weapons.';
 requestAnimationFrame(frame);

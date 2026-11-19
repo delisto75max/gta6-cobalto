@@ -6,6 +6,7 @@ import { mulberry32, pick, range } from './random.js';
 
 const clamp = THREE.MathUtils.clamp;
 const TAU = Math.PI * 2;
+const IDLE_DRIVING = Object.freeze({ forward: 0, right: 0, handbrake: false, jump: false });
 const PAINTS = [
   ['#d95742', '#f0c276'], ['#246b78', '#dfd5b8'], ['#d9b64f', '#454f55'],
   ['#e7dfca', '#bd5a42'], ['#344d69', '#a9c0bd'], ['#6f3840', '#d9a560'],
@@ -99,7 +100,27 @@ function addCommonBodyDetails(body, spec, primary, secondary, baseHeight) {
   body.box(width * 0.51, baseHeight + 0.19, 0, 0.055, 0.045, length * 0.64, secondary);
 }
 
-function buildVehicleModel(spec, primary, secondary, shared) {
+function makePoliceDecal() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 96;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#244f78';
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.strokeStyle = '#b9d5df';
+  g.lineWidth = 5;
+  g.strokeRect(5, 5, canvas.width - 10, canvas.height - 10);
+  g.fillStyle = '#f1f3e9';
+  g.font = '800 58px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('PDC', 128, 51);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
+}
+
+function buildVehicleModel(spec, primary, secondary, shared, police = false) {
   const group = new THREE.Group();
   group.name = spec.name;
   const body = new PrimitiveBatch();
@@ -176,6 +197,15 @@ function buildVehicleModel(spec, primary, secondary, shared) {
     body.box(0, 0.64, -0.82, 0.38, 0.12, 0.35, primary);
   }
 
+  if (police) {
+    body.box(0, 0.79, l * 0.31, w * 0.68, 0.055, l * 0.24, '#315f85');
+    for (const side of [-1, 1]) {
+      body.box(side * w * 0.514, 0.77, -0.12, 0.045, 0.28, l * 0.87, '#315f85');
+      body.box(side * w * 0.52, 1.45, 0.15, 0.04, 0.09, l * 0.64, '#e7eee9');
+    }
+    body.box(0, 1.97, -0.31, 1.55, 0.1, 0.38, '#243238');
+  }
+
   const lightY = style === 'suv' || style === 'van' ? 0.92 : style === 'motorcycle' ? 0.91 : 0.69;
   const lightZ = style === 'motorcycle' ? 0.87 : l / 2 + 0.07;
   const lightGap = style === 'motorcycle' ? 0 : w * 0.32;
@@ -200,6 +230,34 @@ function buildVehicleModel(spec, primary, secondary, shared) {
   const brakeMesh = brakes.makeMesh(brakeMaterial);
   for (const mesh of [bodyMesh, glassMesh, headlightMesh, brakeMesh]) {
     if (mesh) group.add(mesh);
+  }
+
+  const policeLights = [];
+  const policeGeometries = [];
+  const policeMaterials = [];
+  if (police) {
+    shared.policeDecalMaterial ??= makePoliceDecal();
+    const decalGeometry = new THREE.PlaneGeometry(1.35, 0.5);
+    policeGeometries.push(decalGeometry);
+    for (const side of [-1, 1]) {
+      const decal = new THREE.Mesh(decalGeometry, shared.policeDecalMaterial);
+      decal.position.set(side * (w * 0.52 + 0.025), 1.17, 0.05);
+      decal.rotation.y = side * Math.PI / 2;
+      group.add(decal);
+    }
+    const lightGeometry = new THREE.BoxGeometry(0.68, 0.17, 0.31);
+    policeGeometries.push(lightGeometry);
+    for (const [side, color] of [[-1, '#ff3545'], [1, '#35a7ff']]) {
+      const material = new THREE.MeshBasicMaterial({ color, toneMapped: false });
+      const lens = new THREE.Mesh(lightGeometry, material);
+      lens.position.set(side * 0.4, 2.08, -0.31);
+      group.add(lens);
+      const glow = new THREE.PointLight(color, 0, 11, 2);
+      glow.position.set(side * 0.4, 2.17, -0.31);
+      group.add(glow);
+      policeLights.push({ material, glow, side });
+      policeMaterials.push(material);
+    }
   }
 
   const wheelGeometryKey = `${spec.key}:${spec.wheelRadius}:${spec.wheelWidth}`;
@@ -240,7 +298,9 @@ function buildVehicleModel(spec, primary, secondary, shared) {
 
   return {
     group, bodyMesh, bodyMaterial, headlightMaterial, brakeMaterial, wheels, smoke, smokePuffs, smokeMaterial,
-    ownedGeometries: [bodyMesh?.geometry, glassMesh?.geometry, headlightMesh?.geometry, brakeMesh?.geometry].filter(Boolean),
+    policeLights,
+    ownedGeometries: [bodyMesh?.geometry, glassMesh?.geometry, headlightMesh?.geometry, brakeMesh?.geometry, ...policeGeometries].filter(Boolean),
+    ownedMaterials: policeMaterials,
   };
 }
 
@@ -336,13 +396,15 @@ export function createVehicles(stage, city, player, seed = city.seed) {
   }
 
   function spawnVehicle(options = {}) {
-    const spec = resolveType(options.type);
-    const paints = options.color ? [options.color, options.accent || '#e2c890'] : pick(random, PAINTS);
-    const model = buildVehicleModel(spec, paints[0], paints[1], shared);
+    const spec = options.police ? resolveType('marea') : resolveType(options.type);
+    const paints = options.police
+      ? ['#e7eee9', '#315f85']
+      : options.color ? [options.color, options.accent || '#e2c890'] : pick(random, PAINTS);
+    const model = buildVehicleModel(spec, paints[0], paints[1], shared, Boolean(options.police));
     const heading = options.heading ?? 0;
     const vehicle = {
       id: `vehicle-${nextId++}`,
-      name: spec.name,
+      name: options.police ? 'PDC Marea 4x4' : spec.name,
       type: spec.key,
       spec,
       model,
@@ -356,7 +418,10 @@ export function createVehicles(stage, city, player, seed = city.seed) {
       steer: 0,
       health: spec.health,
       maxHealth: spec.health,
-      control: options.control || 'parked',
+      control: options.control || (options.police ? 'police' : 'parked'),
+      police: Boolean(options.police),
+      siren: Boolean(options.siren ?? options.police),
+      justEntered: false,
       occupied: false,
       braking: false,
       handbrake: false,
@@ -463,6 +528,8 @@ export function createVehicles(stage, city, player, seed = city.seed) {
     vehicle.control = 'player';
     vehicle.ai = null;
     activeVehicle = vehicle;
+    vehicle.justEntered = true;
+    if (vehicle.police) vehicle.siren = false;
     chaseReady = false;
     chaseYaw = vehicle.heading;
     player.enterVehicle(vehicle);
@@ -719,6 +786,14 @@ export function createVehicles(stage, city, player, seed = city.seed) {
         puff.visible = vehicle.health > 0 || phase < 0.82;
       }
     }
+    if (vehicle.police) {
+      const redPhase = Math.floor(elapsed * 7.5) % 2 === 0;
+      for (const light of vehicle.model.policeLights) {
+        const active = vehicle.siren && (light.side < 0 ? redPhase : !redPhase);
+        light.material.color.set(active ? (light.side < 0 ? '#ff3545' : '#35a7ff') : '#263c48');
+        light.glow.intensity = active ? 18 : 0;
+      }
+    }
   }
 
   function resolveChaseCamera(origin, wanted, output) {
@@ -737,30 +812,41 @@ export function createVehicles(stage, city, player, seed = city.seed) {
     return output;
   }
 
-  function updateChaseCamera(dt) {
+  function updateChaseCamera(dt, context) {
     if (!activeVehicle) return;
     const speed = Math.abs(activeVehicle.speed);
-    chaseYaw += shortAngle(activeVehicle.heading - chaseYaw) * (1 - Math.exp(-CAMERA.chaseYawSmoothing * dt));
-    forward.set(Math.sin(chaseYaw), 0, Math.cos(chaseYaw));
-    vehicleForward(activeVehicle, right);
-    const distance = CAMERA.chaseDistance + speed * CAMERA.chaseSpeedDistance + activeVehicle.spec.length * 0.18;
-    target.copy(activeVehicle.position);
-    target.y += CAMERA.chaseTargetHeight;
-    desiredCamera.copy(target).addScaledVector(forward, -distance);
-    desiredCamera.y += CAMERA.chaseHeight + Math.min(2.1, speed * 0.025);
+    const aiming = Boolean(context?.combat?.aiming);
+    if (aiming) {
+      chaseYaw = player.state.aimYaw;
+      player.getAimDirection(lateral);
+      right.set(-Math.cos(activeVehicle.heading), 0, Math.sin(activeVehicle.heading));
+      target.copy(activeVehicle.position).addScaledVector(right, 0.72);
+      target.y += 1.32;
+      desiredCamera.copy(target).addScaledVector(lateral, -CAMERA.aimDistance);
+      currentLook.copy(target).addScaledVector(lateral, 18);
+    } else {
+      chaseYaw += shortAngle(activeVehicle.heading - chaseYaw) * (1 - Math.exp(-CAMERA.chaseYawSmoothing * dt));
+      forward.set(Math.sin(chaseYaw), 0, Math.cos(chaseYaw));
+      vehicleForward(activeVehicle, right);
+      const distance = CAMERA.chaseDistance + speed * CAMERA.chaseSpeedDistance + activeVehicle.spec.length * 0.18;
+      target.copy(activeVehicle.position);
+      target.y += CAMERA.chaseTargetHeight;
+      desiredCamera.copy(target).addScaledVector(forward, -distance);
+      desiredCamera.y += CAMERA.chaseHeight + Math.min(2.1, speed * 0.025);
+      currentLook.copy(activeVehicle.position).addScaledVector(right, CAMERA.chaseLookAhead + speed * CAMERA.chaseSpeedLookAhead);
+      currentLook.y += CAMERA.chaseTargetHeight + 0.25;
+    }
     resolveChaseCamera(target, desiredCamera, resolvedCamera);
     if (!chaseReady) {
       currentCameraPosition.copy(resolvedCamera);
       previousCameraPosition.copy(currentCameraPosition);
       chaseReady = true;
     } else {
-      const smoothing = CAMERA.chaseSmoothing / (1 + speed * 0.007);
+      const smoothing = (aiming ? CAMERA.aimSmoothing || 16 : CAMERA.chaseSmoothing) / (1 + speed * 0.007);
       currentCameraPosition.x = THREE.MathUtils.damp(currentCameraPosition.x, resolvedCamera.x, smoothing, dt);
       currentCameraPosition.y = THREE.MathUtils.damp(currentCameraPosition.y, resolvedCamera.y, smoothing, dt);
       currentCameraPosition.z = THREE.MathUtils.damp(currentCameraPosition.z, resolvedCamera.z, smoothing, dt);
     }
-    currentLook.copy(activeVehicle.position).addScaledVector(right, CAMERA.chaseLookAhead + speed * CAMERA.chaseSpeedLookAhead);
-    currentLook.y += CAMERA.chaseTargetHeight + 0.25;
     if (previousLook.lengthSq() === 0) previousLook.copy(currentLook);
     stage.camera.position.copy(currentCameraPosition);
     stage.camera.lookAt(currentLook);
@@ -768,7 +854,7 @@ export function createVehicles(stage, city, player, seed = city.seed) {
 
   function maintainParking() {
     const origin = player.state.position;
-    const parked = vehicles.filter((vehicle) => vehicle.control === 'parked' && !vehicle.occupied);
+    const parked = vehicles.filter((vehicle) => vehicle.control === 'parked' && !vehicle.occupied && !vehicle.police);
     for (const vehicle of parked) {
       const distance = Math.hypot(vehicle.position.x - origin.x, vehicle.position.z - origin.z);
       const wrongDistrict = city.districtAt(vehicle.position.x, vehicle.position.z) !== player.state.district;
@@ -778,7 +864,7 @@ export function createVehicles(stage, city, player, seed = city.seed) {
       }
     }
     let nearby = vehicles.filter((vehicle) => {
-      if (vehicle.control !== 'parked' || vehicle.occupied) return false;
+      if (vehicle.control !== 'parked' || vehicle.occupied || vehicle.police) return false;
       return city.districtAt(vehicle.position.x, vehicle.position.z) === player.state.district
         && Math.hypot(vehicle.position.x - origin.x, vehicle.position.z - origin.z) < VEHICLES.parkedRadius;
     }).length;
@@ -789,30 +875,37 @@ export function createVehicles(stage, city, player, seed = city.seed) {
     }
   }
 
+  function driveAI(vehicle, controls, dt) {
+    if (!vehicle || !vehicles.includes(vehicle) || vehicle === activeVehicle) return false;
+    drive(vehicle, { ...IDLE_DRIVING, ...controls }, dt);
+    return true;
+  }
+
   function update(dt, context) {
     elapsed += dt;
     parkedTimer -= dt;
     for (const vehicle of vehicles) {
       vehicle.previousPosition.copy(vehicle.position);
       vehicle.previousHeading = vehicle.heading;
+      vehicle.justEntered = false;
       vehicle.collisionCooldown = Math.max(0, vehicle.collisionCooldown - dt);
       vehicle.lastImpact = Math.max(0, vehicle.lastImpact - dt * 10);
     }
     previousCameraPosition.copy(currentCameraPosition);
     previousLook.copy(currentLook);
 
-    if (context.actions.interactPressed) {
+    if (!context.police?.inputLocked && context.actions.interactPressed) {
       if (activeVehicle) exit();
       else enter(nearestVehicle(player.state.position.x, player.state.position.z, VEHICLES.enterDistance));
     }
     if (activeVehicle) {
-      drive(activeVehicle, context.actions, dt);
+      drive(activeVehicle, context.police?.inputLocked ? IDLE_DRIVING : context.actions, dt);
       player.state.position.copy(activeVehicle.position);
       player.state.heading = activeVehicle.heading;
       player.state.district = city.districtAt(activeVehicle.position.x, activeVehicle.position.z);
     }
     for (const vehicle of vehicles) updateAppearance(vehicle, dt);
-    updateChaseCamera(dt);
+    updateChaseCamera(dt, context);
     if (parkedTimer <= 0) {
       maintainParking();
       parkedTimer = 1.25;
@@ -842,6 +935,7 @@ export function createVehicles(stage, city, player, seed = city.seed) {
     vehicle.model.headlightMaterial.dispose();
     vehicle.model.brakeMaterial.dispose();
     vehicle.model.smokeMaterial.dispose();
+    for (const material of vehicle.model.ownedMaterials || []) material.dispose();
     vehicle.control = 'removed';
     vehicles.splice(index, 1);
     return true;
@@ -857,6 +951,7 @@ export function createVehicles(stage, city, player, seed = city.seed) {
     nearestVehicle,
     spawnVehicle,
     spawnTrafficCar,
+    driveAI,
     removeVehicle,
     enter,
     exit,

@@ -4,6 +4,11 @@ import * as THREE from 'three';
 import { CAMERA, CITY, INPUT, PALETTE, PLAYER, WORLD } from './config.js';
 
 const clamp = THREE.MathUtils.clamp;
+const NEUTRAL_ACTIONS = Object.freeze({
+  forward: 0, right: 0, sprint: false, jump: false, jumpPressed: false,
+  handbrake: false, interactPressed: false, fire: false, firePressed: false,
+  aim: false, lookX: 0, lookY: 0, wheel: 0,
+});
 
 function shortAngle(angle) {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -94,7 +99,15 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     velocity: new THREE.Vector3(),
     heading: spawn.heading,
     grounded: true,
-    health: 100,
+    health: PLAYER.maxHealth,
+    maxHealth: PLAYER.maxHealth,
+    armour: PLAYER.startingArmour,
+    maxArmour: PLAYER.maxArmour,
+    money: PLAYER.startingMoney,
+    dead: false,
+    aimYaw: spawn.heading,
+    aimPitch: CAMERA.pitch,
+    aiming: false,
     district: city.districtAt(spawn.x, spawn.z),
     vehicle: null,
     driving: false,
@@ -168,25 +181,28 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
   }
 
   function update(dt, context) {
-    const actions = context.actions;
-    if (state.vehicle) {
-      previousPosition.copy(state.position);
-      return;
-    }
+    const locked = context.police?.inputLocked || state.dead;
+    const actions = locked ? NEUTRAL_ACTIONS : context.actions;
     elapsed += dt;
     previousPosition.copy(state.position);
     previousCameraPosition.copy(currentCameraPosition);
 
     yaw -= actions.lookX * INPUT.mouseSensitivity;
     pitch = clamp(pitch + actions.lookY * INPUT.mouseSensitivity, CAMERA.minPitch, CAMERA.maxPitch);
-    wantedDistance = clamp(wantedDistance + actions.wheel * CAMERA.wheelSensitivity, CAMERA.minDistance, CAMERA.maxDistance);
-    distance = THREE.MathUtils.damp(distance, wantedDistance, CAMERA.zoomSmoothing, dt);
+    state.aimYaw = yaw;
+    state.aimPitch = pitch;
+    state.aiming = Boolean(context.combat?.aiming ?? context.actions.aim);
+    if (state.vehicle) return;
+
+    if (!context.combat) wantedDistance = clamp(wantedDistance + actions.wheel * CAMERA.wheelSensitivity, CAMERA.minDistance, CAMERA.maxDistance);
+    const aiming = state.aiming;
+    distance = THREE.MathUtils.damp(distance, aiming ? CAMERA.aimDistance : wantedDistance, CAMERA.zoomSmoothing, dt);
 
     forward.set(Math.sin(yaw), 0, Math.cos(yaw));
     right.set(-Math.cos(yaw), 0, Math.sin(yaw));
     movement.set(0, 0, 0).addScaledVector(forward, actions.forward).addScaledVector(right, actions.right);
     if (movement.lengthSq() > 1) movement.normalize();
-    const speed = actions.sprint ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+    const speed = actions.sprint && !aiming ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
     const blend = 1 - Math.exp(-PLAYER.acceleration * dt);
     state.velocity.x = THREE.MathUtils.lerp(state.velocity.x, movement.x * speed, blend);
     state.velocity.z = THREE.MathUtils.lerp(state.velocity.z, movement.z * speed, blend);
@@ -216,7 +232,9 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     }
 
     const planarSpeed = Math.hypot(state.velocity.x, state.velocity.z);
-    if (planarSpeed > 0.18) {
+    if (aiming) {
+      state.heading += shortAngle(yaw - state.heading) * (1 - Math.exp(-PLAYER.turnSpeed * dt));
+    } else if (planarSpeed > 0.18) {
       const wantedHeading = Math.atan2(state.velocity.x, state.velocity.z);
       state.heading += shortAngle(wantedHeading - state.heading) * (1 - Math.exp(-PLAYER.turnSpeed * dt));
     }
@@ -226,13 +244,23 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     character.rightLeg.rotation.x = -stride;
     character.leftArm.rotation.x = -stride * 0.78;
     character.rightArm.rotation.x = stride * 0.78;
+    if (aiming) {
+      character.leftArm.rotation.x = -1.12;
+      character.rightArm.rotation.x = -1.28;
+      character.leftArm.rotation.z = -0.18;
+      character.rightArm.rotation.z = 0.08;
+    } else {
+      character.leftArm.rotation.z = 0;
+      character.rightArm.rotation.z = 0;
+    }
     character.torso.position.y = 1.26 + Math.sin(elapsed * 2.1) * 0.008;
     character.group.rotation.y = state.heading;
     state.district = city.districtAt(state.position.x, state.position.z);
 
     calculateCameraTarget();
+    if (aiming) target.addScaledVector(right, CAMERA.aimShoulderOffset);
     desiredCamera.copy(target).addScaledVector(forward, -distance * Math.cos(pitch));
-    desiredCamera.y += CAMERA.height + Math.sin(pitch) * distance * 0.65;
+    desiredCamera.y += (aiming ? CAMERA.aimHeight : CAMERA.height) + Math.sin(pitch) * distance * 0.65;
     resolveCamera(target, desiredCamera, resolvedCamera);
     camera.position.x = THREE.MathUtils.damp(camera.position.x, resolvedCamera.x, CAMERA.followSmoothing, dt);
     camera.position.y = THREE.MathUtils.damp(camera.position.y, resolvedCamera.y, CAMERA.followSmoothing, dt);
@@ -251,6 +279,10 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     const ground = city.groundHeightAt(camera.position.x, camera.position.z);
     camera.position.y = Math.max(camera.position.y, ground + CAMERA.minGroundClearance);
     calculateCameraTarget(renderPosition);
+    if (state.aiming) {
+      right.set(-Math.cos(yaw), 0, Math.sin(yaw));
+      target.addScaledVector(right, CAMERA.aimShoulderOffset);
+    }
     camera.lookAt(target);
   }
 
@@ -281,12 +313,42 @@ export function createPlayer(stage, city, spawn = city.playerSpawn) {
     state.position.set(destination.x, city.groundHeightAt(destination.x, destination.z), destination.z);
     state.velocity.set(0, 0, 0);
     state.heading = destination.heading ?? state.heading;
+    state.dead = false;
     yaw = state.heading;
+    state.aimYaw = yaw;
+    state.aimPitch = pitch;
     verticalVelocity = 0;
+    state.grounded = true;
     previousPosition.copy(state.position);
+    character.group.visible = true;
+    character.group.rotation.z = 0;
     snapCamera();
   }
 
+  function getAimDirection(output = new THREE.Vector3()) {
+    const cosine = Math.cos(pitch);
+    return output.set(Math.sin(yaw) * cosine, -Math.sin(pitch), Math.cos(yaw) * cosine).normalize();
+  }
+
+  function addRecoil(amount, horizontal = 0) {
+    pitch = clamp(pitch - amount, CAMERA.minPitch, CAMERA.maxPitch);
+    yaw += horizontal;
+    state.aimYaw = yaw;
+    state.aimPitch = pitch;
+  }
+
+  function setView(nextYaw, nextPitch = pitch) {
+    yaw = nextYaw;
+    pitch = clamp(nextPitch, CAMERA.minPitch, CAMERA.maxPitch);
+    state.aimYaw = yaw;
+    state.aimPitch = pitch;
+  }
+
   snapCamera();
-  return { state, mesh: character.group, update, render, enterVehicle, exitVehicle, teleport };
+  return {
+    state, mesh: character.group, update, render, enterVehicle, exitVehicle, teleport,
+    get health() { return state.health; },
+    get armour() { return state.armour; },
+    getAimDirection, addRecoil, setView,
+  };
 }

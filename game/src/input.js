@@ -5,12 +5,14 @@ const CONTROL_CODES = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight',
   'ShiftLeft', 'ShiftRight', 'Space', 'KeyE', 'Escape', 'Tab',
+  'KeyR', 'Digit1', 'Digit2', 'Digit3',
 ]);
 
 export function createInput(target) {
   const held = new Set();
   const pressed = new Set();
   const mouseButtons = new Set();
+  const mousePressed = new Set();
   let lookX = 0;
   let lookY = 0;
   let wheel = 0;
@@ -28,7 +30,10 @@ export function createInput(target) {
     map: false,
     mapPressed: false,
     fire: false,
+    firePressed: false,
     aim: false,
+    reloadPressed: false,
+    weaponSlotPressed: 0,
     lookX: 0,
     lookY: 0,
     wheel: 0,
@@ -52,6 +57,7 @@ export function createInput(target) {
     held.clear();
     pressed.clear();
     mouseButtons.clear();
+    mousePressed.clear();
   });
 
   document.addEventListener('pointerlockchange', () => {
@@ -66,6 +72,7 @@ export function createInput(target) {
   });
 
   target.addEventListener('pointerdown', (event) => {
+    if (pointerLocked) mousePressed.add(event.button);
     mouseButtons.add(event.button);
     if (!pointerLocked) {
       const request = target.requestPointerLock();
@@ -100,13 +107,17 @@ export function createInput(target) {
     actions.map = held.has('Tab');
     actions.mapPressed = pressed.has('Tab');
     actions.fire = mouseButtons.has(0) && pointerLocked;
+    actions.firePressed = mousePressed.has(0) && pointerLocked;
     actions.aim = mouseButtons.has(2);
+    actions.reloadPressed = pressed.has('KeyR');
+    actions.weaponSlotPressed = pressed.has('Digit1') ? 1 : pressed.has('Digit2') ? 2 : pressed.has('Digit3') ? 3 : 0;
     actions.lookX = lookX;
     actions.lookY = lookY;
     actions.wheel = wheel;
     actions.pointerLocked = pointerLocked;
 
     pressed.clear();
+    mousePressed.clear();
     lookX = 0;
     lookY = 0;
     wheel = 0;

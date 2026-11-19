@@ -233,6 +233,12 @@ export function createPeds(stage, city, seed = city.seed) {
     walker.heading = range(random, -Math.PI, Math.PI);
     walker.previousHeading = walker.heading;
     walker.fear = 0;
+    walker.health = walker.maxHealth;
+    walker.armour = 0;
+    walker.alive = true;
+    walker.dead = false;
+    walker.deathTimer = 0;
+    walker.model.group.rotation.z = 0;
   }
 
   for (let index = 0; index < PEDESTRIANS.count; index += 1) {
@@ -249,6 +255,14 @@ export function createPeds(stage, city, seed = city.seed) {
       fear: 0,
       threatX: 0,
       threatZ: 0,
+      health: 100,
+      maxHealth: 100,
+      armour: 0,
+      maxArmour: 0,
+      alive: true,
+      dead: false,
+      deathTimer: 0,
+      fallSide: random() < 0.5 ? -1 : 1,
       fromNode: null,
       targetNode: null,
       crossing: false,
@@ -286,6 +300,13 @@ export function createPeds(stage, city, seed = city.seed) {
     }
 
     for (const walker of walkers) {
+      if (!walker.alive) {
+        walker.previousPosition.copy(walker.position);
+        walker.previousHeading = walker.heading;
+        walker.deathTimer += dt;
+        if (walker.deathTimer > 10) placeWalker(walker, origin);
+        continue;
+      }
       if (Math.hypot(walker.position.x - origin.x, walker.position.z - origin.z) > PEDESTRIANS.recycleDistance) {
         placeWalker(walker, origin);
       }
@@ -353,6 +374,8 @@ export function createPeds(stage, city, seed = city.seed) {
       group.position.lerpVectors(walker.previousPosition, walker.position, alpha);
       group.position.y += walker.bob;
       group.rotation.y = walker.previousHeading + shortAngle(walker.heading - walker.previousHeading) * alpha;
+      group.rotation.z = walker.alive ? 0 : walker.fallSide * Math.min(Math.PI / 2, walker.deathTimer * 3.2);
+      if (!walker.alive) group.position.y += 0.16;
     }
   }
 
