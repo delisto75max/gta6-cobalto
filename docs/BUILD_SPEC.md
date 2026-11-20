@@ -1,4 +1,4 @@
-# BUILD SPEC — COBALTO: BAHÍA CALIENTE
+# BUILD SPEC — COBALTO: BAHÍA CALIENTE (as built)
 
 An original open-world crime game for make.fun bounty `gta6-01`. 3D low-poly, third-person,
 golden-hour coastal city, played with keyboard and mouse, served as static files from `game/`.
