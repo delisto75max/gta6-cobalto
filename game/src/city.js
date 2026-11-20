@@ -25,7 +25,8 @@ export function buildCity() {
   const city = {
     roads: [], blocks: [], buildings: [], upper: [], roofProps: [], palms: [], lamps: [],
     signals: [], awnings: [], signs: [], billboards: [], benches: [], bins: [], hydrants: [],
-    busStops: [], umbrellas: [], boats: [], containers: [], cranes: [], marketStalls: [],
+    busStops: [], umbrellas: [], towels: [], cafes: [], coastPalms: [], boats: [],
+    containers: [], cranes: [], marketStalls: [],
     lanes: [], pedPaths: [], minimapSegments: [], hills: [], poi: {}, water: [], gulls: [],
   };
 
@@ -159,6 +160,31 @@ export function buildCity() {
     const z = i < 46 ? rng.range(612, 652) : rng.range(612, 654);
     city.umbrellas.push({ x, z, color: [0xe45b4f, 0xe6a23c, 0x3f9e93, 0xd95c86, 0xf0e0b0][rng.int(0, 4)] });
   }
+  // a denser beach club on the sunlit stretch the cover frames
+  for (let i = 0; i < 20; i++) {
+    const x = -380 + i * 21 + rng.range(-5, 5);
+    const z = 606 + (i % 4) * 12 + rng.range(-3, 3);
+    city.umbrellas.push({ x, z, color: [0xe4453a, 0xf0a235, 0x2fa79c, 0xe05a8c, 0xf2e6c4][rng.int(0, 4)] });
+  }
+  for (let i = 0; i < 84; i++) {
+    const x = rng.chance(0.62) ? rng.range(-520, 80) : rng.range(-1010, 430);
+    const z = rng.range(606, 658);
+    city.towels.push({ x, z, rot: rng.range(-0.4, 0.4), color: [0xf2e6c4, 0xe45b4f, 0x3f9e93, 0xe6a23c, 0xd95c86, 0x7fb7d8][rng.int(0, 5)] });
+  }
+  // the stretch the on-foot shot looks across
+  for (let i = 0; i < 14; i++) {
+    city.umbrellas.push({ x: -700 + i * 20 + rng.range(-4, 4), z: 608 + (i % 4) * 12 + rng.range(-2, 2), color: [0xe4453a, 0xf0a235, 0x2fa79c, 0xe05a8c, 0xf2e6c4][rng.int(0, 4)] });
+    city.towels.push({ x: -690 + i * 20, z: 615 + (i % 3) * 10, rot: rng.range(-0.4, 0.4), color: [0xf2e6c4, 0xe45b4f, 0x3f9e93, 0xe6a23c][rng.int(0, 3)] });
+  }
+  // pavement cafe parasols by La Marea and the cover stretch
+  for (const [x, z] of [[-500, 568], [-472, 571], [-448, 568], [-560, 568], [-584, 571], [-610, 569], [-206, 566], [-168, 569], [402, 570]]) {
+    city.cafes.push({ x, z, color: [0xf0e0c0, 0xdd6a4a, 0x3f9e93][rng.int(0, 2)] });
+  }
+  // palms down the coastal median, the sunlit spine of the boulevard
+  for (let x = -1090; x < 1090; x += 24) {
+    if (xs.some((ax) => Math.abs(x - ax) < 26)) continue;
+    city.coastPalms.push({ x: x + rng.range(-1.5, 1.5), z: CFG.coast.z, s: rng.range(1.0, 1.35), r: rng.range(0, 6.28) });
+  }
   // market stalls in Mercado Viejo
   for (let i = 0; i < 18; i++) {
     city.marketStalls.push({ x: rng.range(180, 610), z: rng.range(-120, 320), rot: rng.range(0, 3.14), color: AWNING[rng.int(0, 5)] });
@@ -175,8 +201,15 @@ export function buildCity() {
   city.boats.push({ x: 260, z: 724, s: 1.2, rot: 0.6 }, { x: 410, z: 748, s: 0.9, rot: 2.4 });
   city.boats.push({ x: -560, z: 672, s: 1.25, rot: 0.4, yacht: true }, { x: -452, z: 678, s: 0.95, rot: 1.9, yacht: true }, { x: -382, z: 668, s: 1.1, rot: 2.8 });
   city.boats.push({ x: -300, z: 682, s: 1.3, rot: 1.1, yacht: true }, { x: -210, z: 676, s: 0.9, rot: 2.2 }, { x: -380, z: 688, s: 1.15, rot: 0.7, yacht: true });
+  // a moored fleet in the bay the cover looks across
+  city.boats.push({ x: -168, z: 704, s: 1.35, rot: 0.35, yacht: true }, { x: -74, z: 716, s: 1.0, rot: 2.1, yacht: true }, { x: 26, z: 702, s: 1.15, rot: 1.2 }, { x: -258, z: 726, s: 0.9, rot: 2.7 });
+  city.boats.push({ x: -636, z: 682, s: 1.6, rot: 0.5, yacht: true }, { x: -704, z: 694, s: 1.2, rot: 2.4 }, { x: -372, z: 690, s: 1.45, rot: 1.0, yacht: true });
+  city.boats.push({ x: -548, z: 686, s: 1.1, rot: 1.6, yacht: true }, { x: -426, z: 696, s: 0.9, rot: 0.2 });
+  city.boats.push({ x: -532, z: 680, s: 1.2, rot: 0.8, yacht: true }, { x: -508, z: 690, s: 0.85, rot: 2.2 });
+  city.boats.push({ x: -566, z: 700, s: 1.35, rot: 1.2, yacht: true }, { x: -520, z: 694, s: 1.0, rot: 2.8, yacht: true }, { x: -476, z: 706, s: 0.95, rot: 0.4 });
   // gulls over the bay
   for (let i = 0; i < 14; i++) city.gulls.push({ x: rng.range(-700, 500), z: rng.range(610, 780), y: rng.range(18, 48), r: rng.range(12, 34), ph: rng.range(0, 6.28) });
+  for (let i = 0; i < 7; i++) city.gulls.push({ x: rng.range(-360, 60), z: rng.range(590, 700), y: rng.range(14, 30), r: rng.range(8, 20), ph: rng.range(0, 6.28) });
   // hills north of the city
   for (let i = 0; i < 9; i++) {
     city.hills.push({ x: -1200 + i * 280 + rng.range(-60, 60), z: -1280 - rng.range(0, 160), w: rng.range(620, 980), h: rng.range(80, 160), color: [0x6f7c62, 0x7d8568, 0x666f58][rng.int(0, 2)] });
@@ -328,17 +361,30 @@ function addRoofProps(city, b, rng) {
 }
 
 function addFrontage(city, b, near, rng) {
-  const alongX = near.road.axis === 'z';
-  const dir = near.road.axis === 'z' ? Math.sign(b.x - near.road.at) || 1 : Math.sign(b.z - near.road.at) || 1;
-  const fx = alongX ? b.x + dir * (b.w / 2 + 0.2) : b.x;
-  const fz = alongX ? b.z : b.z + dir * (b.d / 2 + 0.2);
-  const rot = alongX ? (dir > 0 ? 1.57 : -1.57) : (dir > 0 ? 0 : 3.14);
-  const width = Math.min(11, (alongX ? b.d : b.w) * 0.62);
-  if (width > 3.2 && rng.chance(0.8)) {
-    city.awnings.push({ x: fx + (alongX ? dir * 0.8 : 0), y: 3.1, z: fz + (alongX ? 0 : dir * 0.8), w: width, d: 1.8, rot, color: AWNING[rng.int(0, AWNING.length - 1)] });
-  }
-  if (width > 4.5 && rng.chance(0.42)) {
-    const sign = SIGNS[rng.int(0, SIGNS.length - 1)];
-    city.signs.push({ x: fx + (alongX ? dir * 0.22 : 0), y: rng.range(4.6, 6.8), z: fz + (alongX ? 0 : dir * 0.22), w: Math.min(7.2, width * 0.86), h: 1.35, rot, text: sign[0], bg: sign[1], fg: sign[2] });
+  // Face the road the building actually fronts, not the far side of its block.
+  const alongZ = near.road.axis === 'z';
+  const dir = Math.sign((alongZ ? near.road.at - b.x : near.road.at - b.z)) || 1;
+  const fx = alongZ ? b.x + dir * (b.w / 2 + 0.2) : b.x;
+  const fz = alongZ ? b.z : b.z + dir * (b.d / 2 + 0.2);
+  const rot = alongZ ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (dir > 0 ? 0 : Math.PI);
+  const facade = alongZ ? b.d : b.w;
+  const bays = facade > 46 ? 3 : facade > 24 ? 2 : 1;
+  for (let k = 0; k < bays; k++) {
+    const off = bays === 1 ? 0 : ((k + 0.5) / bays - 0.5) * facade * 0.76;
+    const cx = fx + (alongZ ? 0 : off), cz = fz + (alongZ ? off : 0);
+    const width = Math.min(9.6, Math.max(3.4, facade / bays * 0.54));
+    if (rng.chance(0.88)) {
+      city.awnings.push({
+        x: cx + (alongZ ? dir * 0.85 : 0), y: 3.15, z: cz + (alongZ ? 0 : dir * 0.85),
+        w: width, d: 1.9, rot, color: AWNING[rng.int(0, AWNING.length - 1)],
+      });
+    }
+    if (width > 4.1 && rng.chance(0.42)) {
+      const sign = SIGNS[rng.int(0, SIGNS.length - 1)];
+      city.signs.push({
+        x: cx + (alongZ ? dir * 0.3 : 0), y: rng.range(4.7, 6.9), z: cz + (alongZ ? 0 : dir * 0.3),
+        w: Math.min(6.4, width / 0.72), h: 1.35, rot, text: sign[0], bg: sign[1], fg: sign[2],
+      });
+    }
   }
 }

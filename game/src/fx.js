@@ -57,6 +57,7 @@ class Pool {
     this.geo.attributes.position.needsUpdate = true;
     this.geo.attributes.aSize.needsUpdate = true;
     this.geo.attributes.aAlpha.needsUpdate = true;
+    this.geo.attributes.color.needsUpdate = true;
   }
 }
 
@@ -86,7 +87,7 @@ export class FX {
     this.light.position.set(x, y, z); this.light.intensity = 8; this.lightLife = 0.05;
   }
   smokePuff(x, y, z, s = 1, dark = false) {
-    const c = dark ? 0.16 : 0.5;
+    const c = dark ? 0.16 : 0.8;
     this.smoke.spawn(x, y, z, (Math.random() - 0.5) * 1.2, 0.6 + Math.random(), (Math.random() - 0.5) * 1.2, c, c * 0.95, c * 0.9, 0.3 * s, 0.7 + Math.random() * 0.6, 0.4, 0.985, 1.4 * s);
   }
   dust(x, z, s = 1) {
@@ -118,7 +119,7 @@ class SkidPool {
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
     this.geo.setDrawRange(0, 0);
-    const m = new THREE.MeshBasicMaterial({ color: 0x151515, transparent: true, opacity: 0.62, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    const m = new THREE.MeshBasicMaterial({ color: 0x0d0d0d, transparent: true, opacity: 0.76, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
     this.mesh = new THREE.Mesh(this.geo, m); this.mesh.frustumCulled = false; scene.add(this.mesh);
   }
   add(x, z, rot, w) {

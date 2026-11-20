@@ -40,7 +40,7 @@ const state = {
   player, vehicle: null, cash: 1240, respect: 40, minutes: 17 * 60 + 40,
   toasts: [], deadTimer: 0, time: 0, yaw: Math.PI * 1.5, pitch: 0.16, dist: 5.0, yawOff: 0,
   targets: [], specials: [], nextMission: 0, autosave: 0, stepT: 0, shake: 0, engineOn: false,
-  radio: 0, started: false, spawnCar: null, endingT: 0,
+  radio: 0, started: false, spawnCar: null, endingT: 0, heliPos: { x: 16, y: 14, z: -9 },
 };
 const keys = {}, mouse = { down: false, right: false, fired: false, dx: 0, dy: 0 };
 window.__world = world;
@@ -460,6 +460,17 @@ function stageTrafficLine(x0, z0, n, spacing, axis, heading, types = ['cangrejo'
     stageCar(axis === 'z' ? x0 : x0 + off, axis === 'z' ? z0 + off : z0, heading, types[i % types.length]);
   }
 }
+// Two or three painted clouds, placed where the shot's camera will see them.
+function stageClouds(items) {
+  world.clouds.forEach((c, i) => {
+    const it = items[i];
+    if (!it) { c.visible = false; return; }
+    c.visible = true; c.position.set(it.x, it.y, it.z);
+    if (it.s) c.scale.set(it.s, it.s * 0.32, 1);
+    if (it.c) c.material.color.set(it.c);
+    c.material.opacity = it.o ?? 0.72;
+  });
+}
 
 function refreshLights() {
   lights.begin(); shadows.begin();
@@ -484,36 +495,68 @@ function setupShot(n) {
   state.mode = 'shot'; state.shot = n;
   const C = world.camera;
   if (n === 1) {
-    hud.mapScale = 0.235;
-    const car = createVehicle(world.scene, 'viento', { x: 3.4, z: 10, heading: Math.PI, simple: false, color: 0xe2673f });
-    car.speed = 24; car.occupied = true; state.specials.push(car);
-    player.inVehicle = car; player.pos.copy(car.pos); player.heading = Math.PI; player.root.visible = false;
+    hud.mapScale = 0.14;
+    // Sunlit coastal stretch: road ahead, sand and turquoise water on the right.
+    const CX = -200, CZ = 549;
+    const car = createVehicle(world.scene, 'viento', { x: CX, z: CZ, heading: Math.PI / 2 + 0.09, simple: false, color: 0xe2673f });
+    car.speed = 26; car.occupied = true; state.specials.push(car);
+    player.inVehicle = car; player.pos.copy(car.pos); player.heading = car.heading; player.root.visible = false;
     state.vehicle = car;
-    stageCruiser(-2.6, 13.4, Math.PI, 'ram', 'PELICANO-11');
-    stageCruiser(9.8, 14.6, Math.PI, 'ram', 'GAVIOTA-7');
-    const rb = [stageCruiser(-4.2, -85, Math.PI / 2 + 0.16, 'roadblock', 'CORAL-48'), stageCruiser(4.2, -85, Math.PI / 2 - 0.16, 'roadblock', 'DUNA-14')];
-    police.roadblock = { x: 0, z: -85, units: rb.map((u) => u.v), dist: 95, group: new THREE.Group() };
+    // staggered pursuit: one hard on the left rear quarter, one ahead on the sea side
+    stageCruiser(CX - 1.0, CZ - 3.6, Math.PI / 2 + 0.22, 'ram', 'PELICANO-11');
+    stageCruiser(CX + 4.5, CZ + 3.6, Math.PI / 2 - 0.12, 'ram', 'GAVIOTA-7');
+    const rb = [stageCruiser(CX + 87, 536.2, 0.12, 'roadblock', 'CORAL-48'), stageCruiser(CX + 92, 543.8, Math.PI - 0.12, 'roadblock', 'DUNA-14')];
+    police.roadblock = { x: CX + 90, z: 540, units: rb.map((u) => u.v), dist: 90, group: new THREE.Group() };
     police.playerPos.copy(car.pos); police.wanted = 4; police.status = 'IN SIGHT'; police.lastSeen.copy(car.pos);
-    police.spawnHeli(); police.heli.g.position.set(16, 14, -9);
-    police.heli.light.position.set(16, 28, -9); police.heli.light.target.position.copy(car.pos); police.heli.pool.position.copy(car.pos);
-    // civilian traffic both ways
-    stageCar(-3.4, -28, Math.PI, 'cangrejo'); stageCar(10.2, -44, Math.PI, 'marea');
-    stageCar(-10.2, -62, 0, 'tiburon'); stageCar(3.4, 54, 0, 'mula');
-    stageCar(-3.4, 78, Math.PI, 'viento', 0x9bb6c2); stageCar(10.2, 96, 0, 'cangrejo');
-    stageCar(-10.2, 118, Math.PI, 'tiburon', 0x2b3b55); stageCar(3.4, 132, Math.PI, 'marea');
-    stageCar(-3.4, -102, 0, 'viento', 0xd8d2c2);
-    stageCar(-10.2, -1, Math.PI, 'marea', 0xd8d2c2); stageCar(10.2, -6, 0, 'cangrejo');
-    stageCar(-3.4, -9, 0, 'tiburon', 0x56707c); stageCar(-10.2, -18, Math.PI, 'viento', 0xb04f43);
-    stageCar(10.2, -22, Math.PI, 'marea', 0x7c8f6a);
-    for (let i = 0; i < 18; i++) {
-      const side = i % 2 ? 1 : -1;
-      stagePed(i, side * (17 + (i % 3) * 2.5), -30 + i * 7.5, side > 0 ? Math.PI : 0, i % 5 === 0);
+    police.spawnHeli();
+    state.heliPos = { x: CX + 16, y: 9.4, z: CZ + 14 };
+    police.heli.g.position.set(state.heliPos.x, state.heliPos.y, state.heliPos.z);
+    police.heli.light.position.set(state.heliPos.x, state.heliPos.y - 0.9, state.heliPos.z);
+    police.heli.light.target.position.copy(car.pos); police.heli.pool.position.copy(car.pos);
+    // civilian traffic, both directions, clear of the pursuit
+    stageCar(CX + 24, 543.4, Math.PI / 2, 'cangrejo');
+    stageCar(CX + 52, 550.2, Math.PI / 2, 'marea');
+    stageCar(CX + 86, 534.6, -Math.PI / 2, 'tiburon');
+    stageCar(CX + 126, 550.2, Math.PI / 2, 'mula');
+    stageCar(CX + 160, 543.4, Math.PI / 2, 'viento', 0x9bb6c2);
+    stageCar(CX + 34, 536.6, -Math.PI / 2, 'marea');
+    stageCar(CX + 64, 529.8, -Math.PI / 2, 'cangrejo');
+    stageCar(CX + 100, 536.6, -Math.PI / 2, 'tiburon', 0x2b3b55);
+    stageCar(CX - 28, 550.2, Math.PI / 2, 'marea', 0xd8d2c2);
+    stageCar(CX - 56, 536.6, -Math.PI / 2, 'viento', 0xd8d2c2);
+    stageCar(CX - 84, 543.4, Math.PI / 2, 'mula');
+    stageCar(CX - 120, 529.8, -Math.PI / 2, 'cangrejo');
+    stageCar(CX + 142, 529.8, -Math.PI / 2, 'viento', 0xb04f43);
+    // promenade walkers, beachgoers, and a few bathers at the surf line
+    for (let i = 0; i < 14; i++) stagePed(i, CX - 46 + i * 9.2, 574 + (i % 3) * 3.2, i % 2 ? Math.PI / 2 : -Math.PI / 2, i % 3 === 0);
+    for (let i = 14; i < 24; i++) {
+      const k = i - 14;
+      stagePed(i, CX - 40 + k * 10.5, 610 + (k % 4) * 10, k % 2 ? 0.3 : 2.8, k % 3 !== 1);
+      peds.setSwim(i, true);
     }
-    for (let z = 12; z < 44; z += 2.2) { fx.skidMark(2.6, z, Math.PI, 0.2); fx.skidMark(4.2, z, Math.PI, 0.2); }
+    for (let i = 24; i < 28; i++) {
+      const k = i - 24;
+      stagePed(i, CX - 22 + k * 8, 662, 0, true);
+      peds.list[i].swim = true; peds.list[i].wade = 0.34; peds.setSwim(i, true);
+    }
+    // drift marks arcing out from behind the rear axle
+    for (let k = 0; k < 30; k++) {
+      const t = k / 29;
+      const bx = CX - 12 + t * 12, bz = CZ - 3.4 + t * t * 3.4;
+      for (const side of [-0.9, 0.9]) fx.skidMark(bx, bz + side, car.heading, 0.32);
+    }
     missions.index = 5; missions.stage = 1; missions.active = true; missions.done = false;
-    missions.line = { speaker: 'Lucía', role: 'La Marea · your sister', text: 'Kite-1 has the boulevard. Cut the mast and we still have a way out.' };
+    missions.line = { speaker: 'Lucía', role: 'La Marea · your sister', text: 'Kite-1 has the coast road. Keep the sand on your right and we still have a way out.' };
     missions.marker = world.city.poi.mast;
-    C.position.set(3.4, 4.6, 26); C.lookAt(3.4, 1.1, 0); C.fov = 64; C.updateProjectionMatrix();
+    stageClouds([
+      { x: 700, y: 250, z: 980, s: 640, o: 0.82 },
+      { x: 1200, y: 300, z: 420, s: 720, o: 0.7 },
+      { x: 1500, y: 232, z: 1200, s: 560, o: 0.76 },
+    ]);
+    C.position.set(CX - 9.0, 2.8, CZ - 4.0);
+    C.lookAt(CX + 9.0, 0.7, CZ + 7.0);
+    C.rotateZ(-0.087);
+    C.fov = 58; C.updateProjectionMatrix();
     state.shake = 0.2;
   } else if (n === 2) {
     hud.mapScale = 0.14;
@@ -526,11 +569,16 @@ function setupShot(n) {
     police.units.push({ v: cr, role: 'chase', id: 'CORAL-48', fireT: 99, freeze: true });
     police.playerPos.copy(player.pos); police.wanted = 1; police.status = 'IN SIGHT';
     stageCar(-430, 540, Math.PI / 2, 'cangrejo'); stageCar(-400, 548, Math.PI / 2, 'marea');
-    for (let i = 0; i < 18; i++) stagePed(i, -570 + i * 7.5, 574 + (i % 3) * 5, i % 2 ? Math.PI / 2 : -Math.PI / 2, i % 4 === 0);
+    for (let i = 0; i < 18; i++) stagePed(i, -570 + i * 7.5, 583 + (i % 3) * 3.6, i % 2 ? Math.PI / 2 : -Math.PI / 2, i % 4 === 0);
     missions.index = 0; missions.stage = 2; missions.active = true; missions.done = false;
     missions.line = { speaker: 'Lucía', role: 'La Marea · your sister', text: 'Rafa. Five years and you still walk like the cops are watching.' };
     missions.marker = world.city.poi.laMarea;
-    C.position.set(-515, 2.6, 577); C.lookAt(-538, 1.1, 586); C.fov = 62; C.updateProjectionMatrix();
+    stageClouds([
+      { x: -1500, y: 300, z: 180, s: 720, o: 0.78, c: 0xffd0bc },
+      { x: -1300, y: 250, z: 860, s: 620, o: 0.7, c: 0xffd8c4 },
+      { x: -1900, y: 360, z: 520, s: 780, o: 0.82, c: 0xffc8b2 },
+    ]);
+    C.position.set(-515, 2.45, 577); C.lookAt(-538, 1.1, 586); C.rotateZ(-0.02); C.fov = 62; C.updateProjectionMatrix();
   } else if (n === 3) {
     hud.mapScale = 0.16;
     resetPlayer(player, 316, 60, Math.PI);
@@ -543,15 +591,26 @@ function setupShot(n) {
     const o1 = makeOfficer(world.scene, 313, 51); o1.g.rotation.y = 0; police.officers.push(o1);
     const o2 = makeOfficer(world.scene, 325, 51); o2.g.rotation.y = 0; police.officers.push(o2);
     stageCar(319, 56, Math.PI / 2 + 0.1, 'cangrejo', 0x8fa08a);
+    // roadblock clutter
+    const coneGeo = new THREE.ConeGeometry(0.3, 0.72, 6);
+    const coneMat = new THREE.MeshStandardMaterial({ color: 0xe8622e, roughness: 0.8 });
+    const bandMat = new THREE.MeshStandardMaterial({ color: 0xf4ead6, roughness: 0.8 });
+    for (const [cx0, cz0] of [[317.4, 53.2], [322.6, 53.4], [319.4, 48.4], [326.2, 47.8]]) {
+      const cone = new THREE.Mesh(coneGeo, coneMat); cone.position.set(cx0, 0.36, cz0); cone.castShadow = true; world.scene.add(cone);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.23, 0.13, 6), bandMat); band.position.set(cx0, 0.42, cz0); world.scene.add(band);
+    }
     police.playerPos.copy(player.pos); police.wanted = 3; police.status = 'IN SIGHT'; police.lastSeen.copy(player.pos);
     missions.index = 5; missions.stage = 2; missions.active = true; missions.done = false;
     missions.line = { speaker: 'Rafa', role: 'Back home', text: 'Mast is down. Of course they brought friends.' };
     missions.marker = world.city.poi.mast;
-    C.position.set(322, 2.5, 64); C.lookAt(315, 1.2, 50); C.fov = 52; C.updateProjectionMatrix();
+    stageClouds([
+      { x: -700, y: 300, z: -260, s: 620, o: 0.66 },
+      { x: 320, y: 260, z: -900, s: 560, o: 0.58 },
+    ]);
+    C.position.set(322, 2.35, 64); C.lookAt(315, 1.2, 50); C.rotateZ(-0.016); C.fov = 52; C.updateProjectionMatrix();
     state.shake = 0.55;
   } else if (n === 4) {
     hud.mapScale = 0.14;
-    for (const c of world.clouds) c.visible = false;
     world.lighthouseBeam.visible = false;
     const car = createVehicle(world.scene, 'tiburon', { x: -500, z: 540, heading: Math.PI / 2, simple: false, color: 0xe2673f });
     car.speed = 16; car.occupied = true; state.specials.push(car);
@@ -561,6 +620,8 @@ function setupShot(n) {
     target.speed = 12; state.specials.push(target);
     // twelve cars parked in the beach lot, plus coast-road traffic
     for (let i = 0; i < 12; i++) stageCar(-500 + i * 12.7, 608 + (i % 2) * 12, i % 2 ? 0 : Math.PI, ['cangrejo', 'marea', 'tiburon', 'mula', 'viento'][i % 5]);
+    // extra row at the water side of the lot, so the wide shot still shows traffic
+    for (let i = 0; i < 10; i++) stageCar(-704 + i * 23 + (i % 3) * 4, 638 + (i % 3) * 4 - 4, (i % 2 ? 0 : Math.PI) + (i % 3 - 1) * 0.12, ['cangrejo', 'marea', 'tiburon', 'mula', 'viento'][i % 5]);
     stageCar(-520, 600, 0, 'cangrejo'); stageCar(-510, 628, Math.PI, 'marea');
     stageCar(-480, 600, 0, 'tiburon'); stageCar(-460, 628, Math.PI, 'viento', 0xd8d2c2);
     for (let i = 0; i < 12; i++) stageCar(-560 + i * 6.6, i % 2 ? 533.4 : 546.6, i % 2 ? Math.PI / 2 : -Math.PI / 2, ['cangrejo', 'marea', 'tiburon', 'mula', 'viento'][i % 5]);
@@ -568,11 +629,17 @@ function setupShot(n) {
     stageCar(-455, 533, Math.PI / 2, 'tiburon');
     for (let i = 12; i < 18; i++) stagePed(i, -600 + (i - 12) * 18, 575 + (i % 3) * 3, 0, i % 2 === 0);
     for (let i = 24; i < 38; i++) stagePed(i, -640 + (i - 24) * 15, 622 + (i % 4) * 6, i % 2 ? 0.4 : 2.6, i % 3 === 0);
+    for (let i = 38; i < 46; i++) { const k = i - 38; stagePed(i, -590 + k * 13, 654 + (k % 3) * 4, 2.9, k % 2 === 0); peds.setSwim(i, true); }
     police.playerPos.copy(car.pos); police.wanted = 0;
     missions.index = 3; missions.stage = 1; missions.active = true; missions.done = false;
     missions.line = { speaker: 'Rafa', role: 'Back home', text: 'La Marina at golden hour. The whole city looks innocent from here.' };
     missions.marker = world.city.poi.lighthouse;
-    C.position.set(-520, 22, 710); C.lookAt(-80, -8, -150); C.fov = 68; C.updateProjectionMatrix();
+    stageClouds([
+      { x: -260, y: 460, z: -720, s: 1000, o: 0.96, c: 0xffc3ad },
+      { x: 520, y: 420, z: -120, s: 820, o: 0.9, c: 0xffd0ba },
+      { x: -1000, y: 390, z: 330, s: 760, o: 0.88, c: 0xffbda6 },
+    ]);
+    C.position.set(-610, 20, 740); C.lookAt(-280, -4, -180); C.fov = 68; C.updateProjectionMatrix();
   }
   // put staged entities in place and compute matrices
   peds.update(0.0001, player.pos, C.position);
@@ -598,15 +665,28 @@ function finalizeShot(n) {
     fx.smokePuff(325, 1.4, 51, 0.35, true);
     fx.light.intensity = 30;
   }
-  if (n === 1) { fx.muzzle(20, 16, -6, 0.8); }
+  if (n === 1 && state.vehicle) {
+    // bake a visible drift plume: headless capture may only render one frame
+    const v = state.vehicle, h = v.heading;
+    const fx0 = Math.sin(h), fz0 = Math.cos(h), sx = Math.cos(h), sz = -Math.sin(h);
+    for (const side of [-0.9, 0.9]) {
+      for (let k = 0; k < 11; k++) {
+        const back = 1.6 + k * 0.55;
+        const s = 3.5 - k * 0.16 + Math.random() * 0.7;
+        fx.smokePuff(v.pos.x - fx0 * back + sx * side + (Math.random() - 0.5) * 0.7, 0.3 + k * 0.13, v.pos.z - fz0 * back + sz * side + (Math.random() - 0.5) * 0.7, s, k === 8);
+      }
+    }
+    fx.smoke.update(0.001);
+  }
   // shadow + glow pass
   for (const u of police.units) updateVehicle(u.v, 0, { throttle: 0, brake: 1, steer: 0 }, world.city, null, null);
   if (police.heli.active) {
     const h = police.heli;
-    h.light.position.set(player.inVehicle ? player.inVehicle.pos.x : player.pos.x, 28, player.inVehicle ? player.inVehicle.pos.z : player.pos.z);
+    const hp = state.heliPos;
+    h.light.position.set(hp.x, hp.y - 0.9, hp.z);
     h.light.target.position.set(player.inVehicle ? player.inVehicle.pos.x : player.pos.x, 0, player.inVehicle ? player.inVehicle.pos.z : player.pos.z);
     h.pool.position.set(player.inVehicle ? player.inVehicle.pos.x : player.pos.x, 0.12, player.inVehicle ? player.inVehicle.pos.z : player.pos.z);
-    h.g.position.set(16, 14, -9);
+    h.g.position.set(hp.x, hp.y, hp.z);
     h.g.rotation.y = -0.4; h.rotor.rotation.y = 1.2;
     aimBeam(h, player.inVehicle ? player.inVehicle.pos.x : player.pos.x, player.inVehicle ? player.inVehicle.pos.z : player.pos.z);
   }
@@ -656,6 +736,7 @@ function setDebug(n) {
 }
 
 function stepShot(dt) {
+  state.time += dt;
   // Keep the staged scene alive: spin rotors, blink lightbars, animate water.
   for (const u of police.units) updateVehicle(u.v, dt, { throttle: 0, brake: 1, steer: 0 }, world.city, null, null);
   if (police.heli.active) {
@@ -667,12 +748,19 @@ function stepShot(dt) {
   if (state.shot === 3) {
     // the final fire-fight frame is frozen so its flashes and tracers stay visible
   }
-  if (state.shot === 1) {
+  if (state.shot === 1 && state.vehicle) {
+    const v = state.vehicle, h = v.heading;
+    const fx0 = Math.sin(h), fz0 = Math.cos(h), sx = Math.cos(h), sz = -Math.sin(h);
     if (Math.floor(state.time * 20) % 6 === 0) {
-      fx.smokePuff(2.5, 0.3, 12.4, 0.55); fx.smokePuff(4.3, 0.3, 12.4, 0.55);
-      fx.smokePuff(3.4, 0.55, 12.6, 0.35, true);
+      for (const side of [-0.85, 0.85]) {
+        for (let k = 0; k < 3; k++) {
+          fx.smokePuff(v.pos.x - fx0 * (1.8 + k * 0.35) + sx * side, 0.34 + k * 0.1, v.pos.z - fz0 * (1.8 + k * 0.35) + sz * side, 2.4 - k * 0.4);
+        }
+      }
     }
-    if (Math.floor(state.time * 9) % 5 === 0) fx.skidMark(2.6, 12 - Math.random() * 2, Math.PI, 0.2);
+    if (Math.floor(state.time * 9) % 5 === 0) {
+      for (const side of [-0.82, 0.82]) fx.skidMark(v.pos.x - fx0 * 2.4 + sx * side, v.pos.z - fz0 * 2.4 + sz * side, h, 0.2);
+    }
   }
   if (state.shot !== 3) fx.update(dt);
   peds.update(0.0001, player.pos, world.camera.position);

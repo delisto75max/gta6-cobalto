@@ -37,7 +37,7 @@ export class Peds {
       phase: this.rng.range(0, 6.28), state: wide ? 'walk' : 'walk', flee: 0, heading: 0,
       shirt: SHIRTS[this.rng.int(0, SHIRTS.length - 1)], pants: PANTS[this.rng.int(0, PANTS.length - 1)],
       skin: SKIN[this.rng.int(0, SKIN.length - 1)], scale: this.rng.range(0.88, 1.06),
-      x: 0, z: 0, stand: this.rng.chance(0.18),
+      x: 0, z: 0, stand: this.rng.chance(0.18), swim: false, wade: 0,
     };
     if (path.axis === 'z') { p.x = path.at; p.z = t; p.heading = p.dir > 0 ? 0 : Math.PI; }
     else { p.x = t; p.z = path.at; p.heading = p.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
@@ -49,6 +49,15 @@ export class Peds {
     this.parts[1].setColorAt(i, new THREE.Color(p.skin));
     this.parts[2].setColorAt(i, new THREE.Color(p.shirt));
     this.parts[3].setColorAt(i, new THREE.Color(p.shirt));
+    this.parts[4].setColorAt(i, new THREE.Color(p.pants));
+    this.parts[5].setColorAt(i, new THREE.Color(p.pants));
+    for (const part of this.parts) if (part.instanceColor) part.instanceColor.needsUpdate = true;
+  }
+  setSwim(i, on) {
+    const p = this.list[i]; if (!p) return;
+    p.swim = on;
+    const top = on ? p.skin : p.shirt;
+    for (const k of [0, 2, 3]) this.parts[k].setColorAt(i, new THREE.Color(top));
     this.parts[4].setColorAt(i, new THREE.Color(p.pants));
     this.parts[5].setColorAt(i, new THREE.Color(p.pants));
     for (const part of this.parts) if (part.instanceColor) part.instanceColor.needsUpdate = true;
@@ -85,10 +94,10 @@ export class Peds {
       }
       const pos = { x: p.x, z: p.z };
       if (this.city.collide(pos, 0.28)) { p.x = pos.x; p.z = pos.z; p.dir *= -1; }
-      p.x = clamp(p.x, -1160, 1160); p.z = clamp(p.z, -800, 660);
+      p.x = clamp(p.x, -1160, 1160); p.z = clamp(p.z, -800, p.wade ? 667 : 660);
       const sw = p.state === 'flee' ? Math.sin(p.phase) * 0.9 : Math.sin(p.phase) * 0.55;
       const bob = Math.abs(Math.sin(p.phase)) * 0.03;
-      const baseY = 0.15 + bob * p.scale;
+      const baseY = 0.15 + bob * p.scale - (p.wade || 0);
       const R = (rot, px, py, pz, sx, sy, sz) => {
         e.set(rot, p.heading, 0); q.setFromEuler(e);
         v3.set(p.x + px, baseY + py, p.z + pz); s3.set(sx * p.scale, sy * p.scale, sz * p.scale);

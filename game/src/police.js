@@ -20,25 +20,41 @@ export function aimBeam(h, x, z) {
 
 function makeHeli(scene) {
   const g = new THREE.Group();
-  const dark = new THREE.MeshStandardMaterial({ color: 0x1d2b36, roughness: 0.55, metalness: 0.2 });
+  g.scale.setScalar(1.45);
+  const dark = new THREE.MeshStandardMaterial({ color: 0x2b4150, roughness: 0.5, metalness: 0.28 });
   const white = new THREE.MeshStandardMaterial({ color: 0xe6e2d6, roughness: 0.55 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 4.2), dark); body.position.y = 0.6; g.add(body);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.16, 3.3), white); stripe.position.set(0, 0.72, -0.25); g.add(stripe);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.14, 3.4), new THREE.MeshStandardMaterial({ color: 0x7f8e95, roughness: 0.6 })); belly.position.set(0, -0.05, 0.1); g.add(belly);
   const nose = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.0, 1.2), white); nose.position.set(0, 0.55, 2.1); g.add(nose);
   const glass = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.75, 0.9), new THREE.MeshStandardMaterial({ color: 0x24414d, roughness: 0.2, metalness: 0.4 })); glass.position.set(0, 0.75, 1.7); g.add(glass);
   const tail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 4.2), dark); tail.position.set(0, 0.8, -3.6); g.add(tail);
   const fin = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.1, 0.7), white); fin.position.set(0, 1.2, -5.2); g.add(fin);
-  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 0.06, 16), new THREE.MeshBasicMaterial({ color: 0x14181c, transparent: true, opacity: 0.62 }));
+  const rotor = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 0.06, 16), new THREE.MeshBasicMaterial({ color: 0x14181c, transparent: true, opacity: 0.42 }));
   rotor.position.y = 1.5; g.add(rotor);
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 5), dark); mast.position.y = 1.2; g.add(mast);
   const trotor = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.04, 10), new THREE.MeshBasicMaterial({ color: 0x14181c, transparent: true, opacity: 0.5 }));
   trotor.rotation.z = Math.PI / 2; trotor.position.set(0.3, 1.0, -5.3); g.add(trotor);
-  const skidMat = new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.7 });
+  const skidMat = new THREE.MeshStandardMaterial({ color: 0x58676d, roughness: 0.7 });
   for (const x of [-0.75, 0.75]) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 2.6), skidMat); s.position.set(x, -0.08, 0.4); g.add(s); }
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), new THREE.MeshStandardMaterial({ color: 0xff4322, emissive: 0xff2200, emissiveIntensity: 7 }));
   beacon.position.set(0, 1.02, -2.4); g.add(beacon);
-  const spot = new THREE.Mesh(new THREE.ConeGeometry(9, 34, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const spotMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms: { uColor: { value: new THREE.Color(0xfff0c8) }, uOpacity: { value: 0.24 } },
+    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+      void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.0); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+      void main(){
+        float facing=abs(dot(normalize(vN),normalize(vV)));
+        float soft=pow(facing,1.3);
+        float fade=smoothstep(0.0,0.16,vUv.y)*(1.0-smoothstep(0.88,1.0,vUv.y)*0.7);
+        gl_FragColor=vec4(uColor, uOpacity*soft*fade);
+      }`,
+  });
+  const spot = new THREE.Mesh(new THREE.ConeGeometry(5.5, 34, 16, 1, true), spotMat);
   spot.visible = false; scene.add(spot);
-  const pool = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), new THREE.MeshBasicMaterial({ map: TEX.glowTexture(), color: 0xffe6b8, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(15, 15), new THREE.MeshBasicMaterial({ map: TEX.glowTexture(), color: 0xffe6b8, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false }));
   pool.rotation.x = -Math.PI / 2; scene.add(pool);
   const light = new THREE.SpotLight(0xffe2b0, 220, 150, 0.28, 0.5, 1.4); scene.add(light); scene.add(light.target);
   g.visible = false; pool.visible = false;

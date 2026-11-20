@@ -5,7 +5,7 @@ import { RNG } from './rng.js';
 import { buildCity } from './city.js';
 import * as TEX from './textures.js';
 
-const sunDir = new THREE.Vector3(-0.36, 0.2, -0.91).normalize();
+const sunDir = new THREE.Vector3(-0.44, 0.36, -0.82).normalize();
 
 export function createWorld(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -18,10 +18,11 @@ export function createWorld(canvas) {
   renderer.shadowMap.autoUpdate = true;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(CFG.palette.fog, 260, 2100);
+  scene.fog = new THREE.Fog(0xf0bd93, 320, 2350);
   const envTex = TEX.skyGradientTexture();
   envTex.mapping = THREE.EquirectangularReflectionMapping;
   scene.environment = envTex;
+  scene.environmentIntensity = 0.55;
   const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 5200);
   camera.position.set(0, 4, 26);
 
@@ -29,20 +30,20 @@ export function createWorld(canvas) {
   const rng = new RNG(CFG.seed ^ 0x51ed);
 
   // ---- light --------------------------------------------------------------
-  const hemi = new THREE.HemisphereLight(0xffd8b8, 0x2c5159, 1.1);
+  const hemi = new THREE.HemisphereLight(0xffd0b0, 0x2f5663, 0.9);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffc58e, 2.75);
-  sun.position.copy(sunDir).multiplyScalar(420);
+  const sun = new THREE.DirectionalLight(0xffbe82, 3.25);
+  sun.position.copy(sunDir).multiplyScalar(320);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1536, 1536);
-  sun.shadow.camera.left = -170; sun.shadow.camera.right = 170;
-  sun.shadow.camera.top = 170; sun.shadow.camera.bottom = -170;
-  sun.shadow.camera.near = 1; sun.shadow.camera.far = 1400;
+  sun.shadow.camera.left = -150; sun.shadow.camera.right = 150;
+  sun.shadow.camera.top = 150; sun.shadow.camera.bottom = -150;
+  sun.shadow.camera.near = 5; sun.shadow.camera.far = 800;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias = -0.0007;
-  sun.shadow.normalBias = 0.02;
+  sun.shadow.bias = -0.00035;
+  sun.shadow.normalBias = 0.035;
   scene.add(sun); scene.add(sun.target);
-  const fill = new THREE.DirectionalLight(0x73a6bd, 0.45);
+  const fill = new THREE.DirectionalLight(0x6fa2bb, 0.28);
   fill.position.set(120, 90, -180);
   scene.add(fill);
 
@@ -52,22 +53,23 @@ export function createWorld(canvas) {
     new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false,
       uniforms: {
-        uTop: { value: new THREE.Color(0x0d4562) },
-        uMid: { value: new THREE.Color(0xe8895f) },
-        uLow: { value: new THREE.Color(0xffd39b) },
+        uTop: { value: new THREE.Color(0x0f4a66) },
+        uMid: { value: new THREE.Color(0xf2935f) },
+        uLow: { value: new THREE.Color(0xffd7a4) },
         uSunDir: { value: sunDir },
-        uSunCol: { value: new THREE.Color(0xffe0ae) },
+        uSunCol: { value: new THREE.Color(0xffdcae) },
       },
       vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
         varying vec3 vDir; uniform vec3 uTop,uMid,uLow,uSunCol,uSunDir;
         void main(){
-          float h = clamp(vDir.y*1.25+0.06, 0.0, 1.0);
-          vec3 c = mix(uLow, uMid, smoothstep(0.0,0.2,h));
-          c = mix(c, uTop, smoothstep(0.2,0.72,h));
+          float h = clamp(vDir.y*1.18+0.05, 0.0, 1.0);
+          vec3 c = mix(uLow, uMid, smoothstep(0.0,0.26,h));
+          c = mix(c, uTop, smoothstep(0.26,0.72,h));
+          c += uLow * 0.16 * exp(-h * 9.0);
           float sd = max(dot(normalize(vDir), uSunDir), 0.0);
-          c += uSunCol * pow(sd, 420.0) * 5.0;
-          c += uSunCol * pow(sd, 9.0) * 0.16;
+          c += uSunCol * pow(sd, 420.0) * 5.5;
+          c += uSunCol * pow(sd, 9.0) * 0.22;
           gl_FragColor = vec4(c, 1.0);
         }`,
       fog: false,
@@ -82,12 +84,12 @@ export function createWorld(canvas) {
   sunCore.scale.set(120, 120, 1); scene.add(sunCore);
 
   const clouds = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 7; i++) {
     const tex = TEX.cloudTexture(i + 3);
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.5 + rng.next() * 0.25, color: new THREE.Color(0xffd9c0) }));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0.62 + rng.next() * 0.2, color: new THREE.Color(0xffe4cf) }));
     const a = rng.range(-2.4, 0.8), r = rng.range(900, 1800);
-    s.position.set(Math.cos(a) * r, rng.range(180, 390), Math.sin(a) * r - 700);
-    s.scale.set(rng.range(420, 760), rng.range(130, 230), 1);
+    s.position.set(Math.cos(a) * r, rng.range(210, 420), Math.sin(a) * r - 700);
+    s.scale.set(rng.range(520, 820), rng.range(150, 250), 1);
     scene.add(s); clouds.push(s);
   }
 
@@ -248,19 +250,23 @@ export function createWorld(canvas) {
   }
 
   // ---- palms, lamps, signals, furniture ---------------------------------
+  const allPalms = city.palms.concat(city.coastPalms);
   const trunkGeo = new THREE.CylinderGeometry(0.15, 0.27, 4, 5); trunkGeo.translate(0, 2, 0);
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x7b5b3c, roughness: 0.95 });
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, city.palms.length);
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, allPalms.length);
   const frondGeo = palmFronds();
   const frondMat = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 });
-  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, city.palms.length);
-  city.palms.forEach((p, i) => {
+  const fronds = new THREE.InstancedMesh(frondGeo, frondMat, allPalms.length);
+  allPalms.forEach((p, i) => {
     let mm = new THREE.Matrix4(); mm.makeScale(p.s, p.s, p.s); mm.setPosition(p.x, 0, p.z);
     trunks.setMatrixAt(i, mm);
     mm = new THREE.Matrix4(); mm.makeRotationY(p.r); mm.multiply(new THREE.Matrix4().makeScale(p.s, p.s, p.s)); mm.setPosition(p.x, 3.9 * p.s, p.z);
     fronds.setMatrixAt(i, mm);
   });
   trunks.castShadow = true; fronds.castShadow = true; scene.add(trunks, fronds);
+  // planted pits down the coastal median
+  instancedBoxes(scene, city.coastPalms.map((p) => ({ x: p.x, y: 0.02, z: p.z, w: 2.1, h: 0.34, d: 1.5, color: 0x8e8676 })));
+  instancedBoxes(scene, city.coastPalms.map((p) => ({ x: p.x, y: 0.3, z: p.z, w: 1.7, h: 0.08, d: 1.15, color: 0x5d6b46 })));
 
   const poleGeo = new THREE.CylinderGeometry(0.09, 0.12, 5.2, 5); poleGeo.translate(0, 2.6, 0);
   const poleMat = new THREE.MeshStandardMaterial({ color: 0x42484a, roughness: 0.75, metalness: 0.35 });
@@ -316,7 +322,7 @@ export function createWorld(canvas) {
   stallCloth.count = stallTable.count = city.marketStalls.length; scene.add(stallCloth, stallTable);
 
   // ---- beach, sea, pier, boats, lighthouse ------------------------------
-  const beach = new THREE.Mesh(new THREE.BoxGeometry(2260, 0.5, 72), new THREE.MeshStandardMaterial({ map: sandTex, color: 0xe8d2a8, roughness: 1 }));
+  const beach = new THREE.Mesh(new THREE.BoxGeometry(2260, 0.5, 72), new THREE.MeshStandardMaterial({ map: sandTex, color: 0xf4d9a6, roughness: 1 }));
   beach.position.set(0, -0.1, 634); beach.receiveShadow = true; scene.add(beach);
   const promTex = concrete.clone(); promTex.wrapS = promTex.wrapT = THREE.RepeatWrapping; promTex.repeat.set(140, 3.2); promTex.needsUpdate = true;
   const promenade = new THREE.Mesh(new THREE.BoxGeometry(2260, 0.16, 44), new THREE.MeshStandardMaterial({ map: promTex, color: 0xc8b89c, roughness: 0.9 }));
@@ -332,17 +338,80 @@ export function createWorld(canvas) {
   for (let i = 0; i < 13; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 9), markMat); s.position.set(-575 + i * 26, 0.14, 618); scene.add(s); }
   const seawall = new THREE.Mesh(new THREE.BoxGeometry(2260, 1.0, 1.6), new THREE.MeshStandardMaterial({ color: 0xc9bea8, roughness: 0.9 }));
   seawall.position.set(0, 0.3, 598); scene.add(seawall);
-  for (const u of city.umbrellas) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 4), poleMat);
-    pole.position.set(u.x, 1.1, u.z); scene.add(pole);
-    const top = new THREE.Mesh(new THREE.ConeGeometry(1.7, 0.7, 7), new THREE.MeshStandardMaterial({ color: u.color, roughness: 0.9, side: THREE.DoubleSide }));
-    top.position.set(u.x, 2.35, u.z); scene.add(top);
+  const umbPoles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.05, 2.4, 4), poleMat, Math.max(1, city.umbrellas.length));
+  const umbTops = new THREE.InstancedMesh(new THREE.ConeGeometry(1.7, 0.7, 7), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), Math.max(1, city.umbrellas.length));
+  city.umbrellas.forEach((u, i) => {
+    const mm = new THREE.Matrix4();
+    mm.makeTranslation(u.x, 1.1, u.z); umbPoles.setMatrixAt(i, mm);
+    mm.makeRotationY(u.r || 0); mm.setPosition(u.x, 2.35, u.z); umbTops.setMatrixAt(i, mm);
+    umbTops.setColorAt(i, new THREE.Color(u.color));
+  });
+  umbPoles.castShadow = true; umbTops.castShadow = true;
+  umbPoles.count = umbTops.count = city.umbrellas.length;
+  scene.add(umbPoles, umbTops);
+  // towels, mats and the odd beach ball
+  const towelMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.02, 1), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }), Math.max(1, city.towels.length));
+  city.towels.forEach((t, i) => {
+    const mm = new THREE.Matrix4().makeRotationY(t.rot);
+    mm.setPosition(t.x, 0.17, t.z); mm.scale(new THREE.Vector3(1.7, 1, 0.95));
+    towelMesh.setMatrixAt(i, mm); towelMesh.setColorAt(i, new THREE.Color(t.color));
+  });
+  towelMesh.receiveShadow = true; scene.add(towelMesh);
+  // beach-club parasols and cafe tables on the promenade
+  for (const k of city.cafes) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 2.5, 5), poleMat);
+    pole.position.set(k.x, 1.37, k.z); scene.add(pole);
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.85, 0.55, 8), new THREE.MeshStandardMaterial({ color: k.color, roughness: 0.92, side: THREE.DoubleSide }));
+    canopy.position.set(k.x, 2.65, k.z); canopy.castShadow = true; scene.add(canopy);
+    const table = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.55, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0xe6ddc8, roughness: 0.7 }));
+    table.position.set(k.x, 0.86, k.z); scene.add(table);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.78, 6), poleMat);
+    stem.position.set(k.x, 0.45, k.z); scene.add(stem);
+  }
+  // a striped food cart on the promenade
+  for (const [kx, kz, kc] of [[-556, 569, 0xd94f3f], [-176, 567, 0x2f8f86]]) {
+    const cart = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.05, 1.25), new THREE.MeshStandardMaterial({ color: 0xf1e6cd, roughness: 0.75 }));
+    body.position.y = 0.9; cart.add(body);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.42, 0.28, 1.27), new THREE.MeshStandardMaterial({ color: kc, roughness: 0.8 }));
+    stripe.position.y = 1.2; cart.add(stripe);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.1, 1.7), new THREE.MeshStandardMaterial({ color: kc, roughness: 0.85 }));
+    canopy.position.y = 2.35; canopy.castShadow = true; cart.add(canopy);
+    for (const ox of [-1.25, 1.25]) for (const oz of [-0.7, 0.7]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.2, 4), poleMat);
+      post.position.set(ox, 1.75, oz); cart.add(post);
+    }
+    for (const ox of [-0.8, 0.8]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.1, 8), new THREE.MeshStandardMaterial({ color: 0x24282c, roughness: 0.9 }));
+      wheel.rotation.x = Math.PI / 2; wheel.position.set(ox, 0.28, 0.66); cart.add(wheel);
+    }
+    cart.position.set(kx, 0.12, kz); scene.add(cart);
+  }
+  // two lifeguard towers anchor the sand
+  for (const [lx, lz] of [[-140, 642], [-566, 646]]) {
+    const g = new THREE.Group();
+    const legMat = new THREE.MeshStandardMaterial({ color: 0xd8cbb2, roughness: 0.9 });
+    for (const ox of [-1.3, 1.3]) for (const oz of [-1.1, 1.1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.18), legMat);
+      leg.position.set(ox, 1.2, oz); g.add(leg);
+    }
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(3.1, 1.7, 2.6), new THREE.MeshStandardMaterial({ color: 0xf1e5c8, roughness: 0.85 }));
+    hut.position.y = 3.25; g.add(hut);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.45, 1.0, 4), new THREE.MeshStandardMaterial({ color: 0xd94f3f, roughness: 0.8 }));
+    roof.rotation.y = Math.PI / 4; roof.position.y = 4.55; g.add(roof);
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.55), new THREE.MeshBasicMaterial({ color: 0xffd05a, side: THREE.DoubleSide }));
+    flag.position.set(1.6, 5.3, 0); g.add(flag);
+    g.position.set(lx, 0.12, lz); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(g);
   }
 
   const water = makeWater();
   scene.add(water.mesh);
   const foam = new THREE.Mesh(new THREE.PlaneGeometry(2260, 5), new THREE.MeshBasicMaterial({ map: TEX.foamTexture(), transparent: true, opacity: 0.75, depthWrite: false, color: 0xfff4e6 }));
   foam.rotation.x = -Math.PI / 2; foam.position.set(0, 0.08, 668); scene.add(foam);
+  const wetSand = new THREE.Mesh(new THREE.PlaneGeometry(2260, 9), new THREE.MeshStandardMaterial({ color: 0xc9b083, roughness: 0.75, transparent: true, opacity: 0.8 }));
+  wetSand.rotation.x = -Math.PI / 2; wetSand.position.set(0, 0.168, 661); scene.add(wetSand);
+  const wash = new THREE.Mesh(new THREE.PlaneGeometry(2260, 2.4), new THREE.MeshBasicMaterial({ map: TEX.foamTexture(), transparent: true, opacity: 0.5, depthWrite: false, color: 0xffffff }));
+  wash.rotation.x = -Math.PI / 2; wash.position.set(0, 0.1, 664.5); scene.add(wash);
 
   const pierMat = new THREE.MeshStandardMaterial({ color: 0x8a6b4c, roughness: 0.95 });
   const pier = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 96), pierMat);
@@ -350,10 +419,19 @@ export function createWorld(canvas) {
 
   const boatGrp = new THREE.Group();
   for (const b of city.boats) {
-    const hull = new THREE.Mesh(new THREE.BoxGeometry(b.yacht ? 4.2 : 3.0, 1.1, b.yacht ? 13 : 8), new THREE.MeshStandardMaterial({ color: b.yacht ? 0xf2ead8 : 0xd8d2c2, roughness: 0.55, metalness: 0.1 }));
+    const L = b.yacht ? 13 : 8, W = b.yacht ? 4.2 : 3.0;
+    const hullMat = new THREE.MeshStandardMaterial({ color: b.yacht ? 0xf2ead8 : 0xd8d2c2, roughness: 0.55, metalness: 0.1 });
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(W, 1.1, L), hullMat);
     hull.position.set(0, 0.2, 0); boatGrp.add(hull);
+    // pointed bow, so the silhouette reads as a boat from any angle
+    const bow = new THREE.Mesh(new THREE.ConeGeometry(W * 0.5, 2.2, 4), hullMat);
+    bow.rotation.x = Math.PI / 2; bow.position.set(0, 0.2, L / 2 + 1.05); boatGrp.add(bow);
+    const wind = new THREE.Mesh(new THREE.BoxGeometry(W * 0.62, 0.55, 0.6), new THREE.MeshStandardMaterial({ color: 0x35505a, roughness: 0.25, metalness: 0.3 }));
+    wind.rotation.x = -0.5; wind.position.set(0, 1.05, L * 0.16); boatGrp.add(wind);
     const cab = new THREE.Mesh(new THREE.BoxGeometry(b.yacht ? 2.8 : 2.0, 1.3, b.yacht ? 4.4 : 2.6), new THREE.MeshStandardMaterial({ color: 0x4e6c74, roughness: 0.5 }));
     cab.position.set(0, 1.2, b.yacht ? -1 : 0); boatGrp.add(cab);
+    const motor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.35), new THREE.MeshStandardMaterial({ color: 0x24282c, roughness: 0.8 }));
+    motor.position.set(0, 0.5, -L / 2 - 0.18); boatGrp.add(motor);
     if (b.yacht) {
       const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 9, 4), poleMat); mast.position.set(0, 5.0, -2.5); boatGrp.add(mast);
     }
@@ -441,10 +519,10 @@ function buildingMaterial(seeds) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uSun: { value: sunDir },
-      uSunCol: { value: new THREE.Color(0xffd0a0) },
-      uFogColor: { value: new THREE.Color(CFG.palette.fog) },
-      uFogNear: { value: 240 },
-      uFogFar: { value: 2100 },
+      uSunCol: { value: new THREE.Color(0xffc48e) },
+      uFogColor: { value: new THREE.Color(0xf0bd93) },
+      uFogNear: { value: 320 },
+      uFogFar: { value: 2350 },
     },
     vertexShader: `
       attribute float aSeed;
@@ -500,7 +578,7 @@ function buildingMaterial(seeds) {
           col += vec3(1.0,0.62,0.28) * shop * (0.2 + 0.9 * h21(vec2(floor(u * 0.5), vSeed))) * 0.48;
         }
         float ndl = max(dot(n, normalize(uSun)), 0.0);
-        vec3 lit = col * (0.52 + 0.78 * ndl) * mix(vec3(0.72,0.8,0.96), uSunCol, ndl * 0.75);
+        vec3 lit = col * (0.42 + 0.92 * ndl) * mix(vec3(0.66,0.76,0.94), uSunCol, ndl * 0.8);
         float fog = smoothstep(uFogNear, uFogFar, distance(vW, cameraPosition));
         lit = mix(lit, uFogColor, fog);
         gl_FragColor = vec4(lit, 1.0);
@@ -563,11 +641,11 @@ function makeWater() {
   const uniforms = {
     uTime: { value: 0 },
     uSunDir: { value: sunDir },
-    uFogColor: { value: new THREE.Color(CFG.palette.fog) },
-    uFogNear: { value: 240 },
-    uFogFar: { value: 2100 },
-    uDeep: { value: new THREE.Color(0x073b46) },
-    uShallow: { value: new THREE.Color(0x139093) },
+    uFogColor: { value: new THREE.Color(0xf0bd93) },
+    uFogNear: { value: 320 },
+    uFogFar: { value: 2350 },
+    uDeep: { value: new THREE.Color(0x075762) },
+    uShallow: { value: new THREE.Color(0x25c6bd) },
   };
   const mat = new THREE.ShaderMaterial({
     uniforms,
@@ -587,11 +665,12 @@ function makeWater() {
         float fres = pow(1.0 - max(dot(n,v),0.0), 3.0);
         vec3 col = mix(uDeep, uShallow, fres*0.85);
         float spec = pow(max(dot(reflect(-uSunDir,n),v),0.0), 90.0);
-        col += vec3(1.0,0.72,0.4) * spec * 2.4;
+        col += vec3(1.0,0.72,0.4) * spec * 3.4;
         float spark = step(0.995, fract(sin(dot(floor(vW.xz*1.8), vec2(12.9898,78.233)) + uTime*0.6)*43758.5453));
-        col += vec3(1.0,0.82,0.55) * spark * 0.55;
+        col += vec3(1.0,0.82,0.55) * spark * 0.7;
         float shore = smoothstep(660.0, 720.0, vW.z);
-        col = mix(col, vec3(0.55,0.66,0.64), shore*0.22);
+        col = mix(col, vec3(0.55,0.66,0.64), shore*0.18);
+        col = mix(col, uShallow*1.12, (1.0 - smoothstep(662.0, 726.0, vW.z)) * 0.3);
         float fog = smoothstep(uFogNear,uFogFar,distance(vW,cameraPosition));
         gl_FragColor = vec4(mix(col,uFogColor,fog),1.0);
       }`,
@@ -633,12 +712,23 @@ class Bloom {
       depthTest: false, depthWrite: false,
     });
     this.comp = new THREE.ShaderMaterial({
-      uniforms: { tScene: { value: this.rtScene.texture }, tBloom: { value: this.rtB.texture }, uBloom: { value: 2.0 } },
+      uniforms: {
+        tScene: { value: this.rtScene.texture }, tBloom: { value: this.rtB.texture },
+        uBloom: { value: 2.0 }, uSat: { value: 1.16 }, uContrast: { value: 1.075 },
+      },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }`,
-      fragmentShader: `uniform sampler2D tScene,tBloom; uniform float uBloom; varying vec2 vUv;
+      fragmentShader: `uniform sampler2D tScene,tBloom; uniform float uBloom, uSat, uContrast; varying vec2 vUv;
         vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
-        void main(){ vec3 c=texture2D(tScene,vUv).rgb + texture2D(tBloom,vUv).rgb*uBloom; c=aces(c*1.32);
-          gl_FragColor=vec4(pow(c,vec3(1.0/2.2)),1.0); }`,
+        void main(){
+          vec3 c=texture2D(tScene,vUv).rgb + texture2D(tBloom,vUv).rgb*uBloom;
+          c=aces(c*1.32);
+          float l=dot(c,vec3(0.2126,0.7152,0.0722));
+          c=mix(vec3(l),c,uSat);
+          c=(c-0.5)*uContrast+0.5;
+          c*=vec3(1.035,1.0,0.968);
+          c=clamp(c,0.0,1.0);
+          gl_FragColor=vec4(pow(c,vec3(1.0/2.2)),1.0);
+        }`,
       depthTest: false, depthWrite: false,
     });
     this.resize(this.w, this.h);
